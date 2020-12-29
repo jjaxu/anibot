@@ -1,0 +1,42 @@
+service: anibot
+ 
+provider: # Required to tell serverless this is an aws project, modify as needed
+  name: aws
+  runtime: python3.8
+  # Modify the following with real aws profile to deploy to aws
+  # Add more attributes as needed to suit your aws environment, eg. region
+  stage: prod
+  profile: botprofile
+
+# Configure your lambda function(s) here
+functions:
+  hello:
+    maximumRetryAttempts: 0
+    handler: handler.hello
+    events:
+      - http:
+          path: /hello
+          method: post
+          async: true
+
+package:
+  exclude:
+    - ./node_modules
+
+plugins:
+  - serverless-localstack
+  - serverless-python-requirements
+custom:
+  localstack: # configures localstack
+    stages:
+      - local # deployments to this stage will be on localstack
+    host: http://localhost
+    edgePort: 4566
+    autostart: false # If starting localstack manually, set this to false
+    lambda:
+      mountCode: false # If starting localstack manually, set this to false
+      docker:
+        sudo: false
+  pythonRequirements:
+    slim: true
+    pythonBin: python3
