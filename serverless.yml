@@ -7,36 +7,29 @@ provider: # Required to tell serverless this is an aws project, modify as needed
   # Add more attributes as needed to suit your aws environment, eg. region
   stage: prod
   profile: botprofile
+  logRetentionInDays: 14
+  environment:
+    ANIBOT_TOKEN: ${env:ANIBOT_TOKEN}
 
 # Configure your lambda function(s) here
 functions:
-  hello:
+  trigger:
     maximumRetryAttempts: 0
-    handler: handler.hello
+    handler: handler.trigger
     events:
       - http:
-          path: /hello
+          path: /trigger
           method: post
           async: true
 
 package:
   exclude:
     - ./node_modules
+    - ./local.py
 
 plugins:
-  - serverless-localstack
   - serverless-python-requirements
 custom:
-  localstack: # configures localstack
-    stages:
-      - local # deployments to this stage will be on localstack
-    host: http://localhost
-    edgePort: 4566
-    autostart: false # If starting localstack manually, set this to false
-    lambda:
-      mountCode: false # If starting localstack manually, set this to false
-      docker:
-        sudo: false
   pythonRequirements:
     slim: true
     pythonBin: python3
