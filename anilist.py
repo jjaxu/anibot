@@ -1,4 +1,4 @@
-import requests, json
+import requests, json, logging
 
 ANILIST_URL = 'https://graphql.anilist.co'
 
@@ -6,7 +6,7 @@ def getAnime(name: str):
     querySearch = '''
     query ($searchInput: String) {
         Page {
-            media (search: $searchInput, type: ANIME) {
+            media (search: $searchInput, type: ANIME, sort: SEARCH_MATCH) {
                 id
                 description
                 averageScore
@@ -31,6 +31,10 @@ def getAnime(name: str):
 
     # Make the HTTP Api request
     response = requests.post(ANILIST_URL, json={'query': querySearch, 'variables': variables})
-    json_data = json.loads(response.text)
+    if not response.ok:
+        logging.error(f"Failed to search anime {name}. Error: {response.text}")
+        return []
 
-    return json_data["data"]["Page"]["media"]
+    result = json.loads(response.text)["data"]["Page"]["media"]
+    logging.info(f'Anime results returned: {len(result)}')
+    return result
