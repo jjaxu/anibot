@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# Used to start the local server and set the webhook locally
+sethook() {
+    sleep 2s
+    LOCAL_URL=$(curl -s http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[] | select(.proto=="https") .public_url' )
+    URL="https://api.telegram.org/bot${ANIBOT_TOKEN}/setWebhook?url=${LOCAL_URL}"
+    echo "Setting webhook to local webhook: ${URL}" 
+    curl ${URL}
+}
+
+sethook & 
+~/Code/Plugins/ngrok http 5000
