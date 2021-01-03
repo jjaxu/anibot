@@ -1,6 +1,7 @@
 import os, json, requests, logging
 
 from anilist import getAnime
+from htmlParser import strip_tags
 
 TOKEN = os.environ['ANIBOT_TOKEN']
 TELEGRAM_BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
@@ -57,14 +58,19 @@ def handle_inline_query(data):
             title = f'{title} ({anime["title"]["english"]})'
 
         description = anime["description"] or "(no description)"
-        description.replace("<br>", "\n")
+        description_no_markup = strip_tags(description)
+        description_html = description.replace("<br>", "")
+
+        siteUrl = anime["siteUrl"]
 
         msg_body = (
-            f"*{title}*\n"
-            f"*Average score:* {anime['averageScore'] or '-' }\n"
-            f"*Episodes:* {anime['episodes']}\n\n"
+            f"<b>Title:</b> <i>{title}</i>\n"
+            f"<b>Average score:</b> {anime['averageScore'] or '-' }\n"
+            f"<b>Episodes:</b> {anime['episodes']}\n\n"
 
-            # f"{description}"
+            # f"{description_html}\n"
+
+            f"<a href=\"{siteUrl}\">View on AniList</a>"
         )
 
         # Add data to result
@@ -74,11 +80,11 @@ def handle_inline_query(data):
             "title": title,
             "input_message_content": {
                 "message_text": msg_body,
-                #"parse_mode": "Markdown"
+                "parse_mode": "html"
             },
-            # "url": "https://anilist.co/anime/116267/Tonikaku-Kawaii/",
-            "description": f'({anime["averageScore"] or "-"}) ' + description,
-            "thumb_url": anime["coverImage"]["medium"]
+            "url": siteUrl,
+            "description": f'({anime["averageScore"] or "-"}) ' + description_no_markup,
+            "thumb_url": anime["coverImage"]["medium"],
         })
 
     data = {

@@ -8,9 +8,10 @@ def getAnime(name: str):
         Page {
             media (search: $searchInput, type: ANIME, sort: SEARCH_MATCH) {
                 id
-                description
+                description (asHtml: false)
                 averageScore
                 episodes
+                siteUrl
                 coverImage {
                     medium
                 }
@@ -36,5 +37,5 @@ def getAnime(name: str):
         return []
 
     result = json.loads(response.text)["data"]["Page"]["media"]
-    logging.info(f'Anime results returned: {len(result)}')
+    logging.info(f'Anime results returned for query "{name}": {len(result)}')
     return result
