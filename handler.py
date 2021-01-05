@@ -7,7 +7,7 @@ TOKEN = os.environ['ANIBOT_TOKEN']
 TELEGRAM_BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 MAX_ITEMS = 20
 
-logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(filename)s:%(funcName)s:%(asctime)s:%(message)s')
+logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(filename)s:%(funcName)s:%(asctime)s:%(message)s')
 
 # The entry point to the function
 # event should have the format { "body": json_obj }
@@ -44,11 +44,17 @@ def handle_inline_query(data):
     # inline query can only return up to 20 items
     for idx in range(min(MAX_ITEMS, len(animeList))):
         anime = animeList[idx]
+        title_english_formatted = ""
 
         # Format data
-        title = anime["title"]["romaji"]
-        if anime["title"]["english"]:
-            title = f'{title} ({anime["title"]["english"]})'
+        title_romaji = anime["title"]["romaji"]
+        title_english = anime["title"]["english"]
+        title_native = anime["title"]["native"]
+
+        title_japanese = title_romaji + (f" ({title_native})" if title_native else "")
+
+        if title_english:
+            title_english_formatted = f"&#x1F1FA;&#x1F1F8; <i>{title_english}</i>\n"
 
         description = anime["description"] or "(no description)"
         description_no_markup = strip_tags(description)
@@ -58,18 +64,19 @@ def handle_inline_query(data):
         episodes_or_volumes_label = "Episodes" if anime["type"] == "ANIME" else "Volumes"
 
         msg_body = (
-            f"<i>{title}</i>\n\n"
-            f"<b>Type:</b> {anime.get('type', '-').title()}\n"
+            f"&#x1F1EF;&#x1F1F5; <i>{title_japanese}</i>\n"
+            f"{title_english_formatted}\n"
+            f"<b>Type:</b> {anime.get('type', '-').title()} ({anime.get('format', '-').replace('_', ' ')})\n"
             f"<b>Status:</b> {anime.get('status', '-').title().replace('_', ' ') }\n"
             f"<b>Average score:</b> {anime.get('averageScore', '-') }\n"
             f"<b>{episodes_or_volumes_label}:</b> {anime.get(episodes_or_volumes_label.lower(), '-')}\n"
             f"<a href=\"{siteUrl}\">&#x200b;</a>" # To show preview, use a zero-width space
         )
 
-        inline_description = " ".join(
+        inline_description = "".join(
             (
-                f"[{anime['type']}]" if anime['type'] else "",
-                f"({anime['averageScore']})" if anime['averageScore'] else "",
+                f"[{anime['format'].replace('_', ' ')}] " if anime['format'] else "",
+                f"({anime['averageScore']}) " if anime['averageScore'] else "",
                 description_no_markup
             )
         )
@@ -78,7 +85,7 @@ def handle_inline_query(data):
         results.append({ # InlineQueryResultArticle
             "type": "article",
             "id": str(idx),
-            "title": title,
+            "title": title_romaji + (f" ({title_english})" if title_english else ""),
             "input_message_content": { # InputMessageContent
                 "message_text": msg_body,
                 "parse_mode": "html",

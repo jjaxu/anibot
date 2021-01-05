@@ -14,6 +14,7 @@ def getAnime(name: str):
                 averageScore
                 episodes
                 volumes
+                format
                 siteUrl
                 coverImage {
                     medium
