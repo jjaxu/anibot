@@ -6,11 +6,14 @@ def getAnime(name: str):
     querySearch = '''
     query ($searchInput: String) {
         Page {
-            media (search: $searchInput, type: ANIME, sort: SEARCH_MATCH) {
+            media (search: $searchInput, sort: SEARCH_MATCH) {
                 id
                 description (asHtml: false)
+                status
+                type
                 averageScore
                 episodes
+                volumes
                 siteUrl
                 coverImage {
                     medium

@@ -21,18 +21,11 @@ def trigger(event, context):
         "request": data
     }
     
-    # Normal Query
-    # telegram_response = {
-    #     "chat_id": data["message"]["chat"]["id"],
-    #     "text": f"Hello from Anibot 3! ({str(context)})"
-    # }
-
-    # url = TELEGRAM_BASE_URL + "/sendMessage"
-    # res = requests.post(url, json=telegram_response)
-    # if not res.ok:
-    #     logging.error(f"Telegram failed to send the message: error code {res.status_code}, message: {res.text}")
-
-    handle_inline_query(data)
+    # Inline query
+    if data.get("inline_query"):
+        handle_inline_query(data)
+    else: # Normal query
+        handle_normal_query(data)
 
     # Remove
     return {
@@ -62,28 +55,47 @@ def handle_inline_query(data):
         description_html = description.replace("<br>", "")
 
         siteUrl = anime["siteUrl"]
+        episodes_or_volumes_label = "Episodes" if anime["type"] == "ANIME" else "Volumes"
 
         msg_body = (
-            f"<b>Title:</b> <i>{title}</i>\n"
-            f"<b>Average score:</b> {anime['averageScore'] or '-' }\n"
-            f"<b>Episodes:</b> {anime['episodes']}\n\n"
-
-            # f"{description_html}\n"
-
-            f"<a href=\"{siteUrl}\">View on AniList</a>"
+            f"<i>{title}</i>\n\n"
+            f"<b>Type:</b> {anime.get('type', '-').title()}\n"
+            f"<b>Status:</b> {anime.get('status', '-').title().replace('_', ' ') }\n"
+            f"<b>Average score:</b> {anime.get('averageScore', '-') }\n"
+            f"<b>{episodes_or_volumes_label}:</b> {anime.get(episodes_or_volumes_label.lower(), '-')}\n"
+            f"<a href=\"{siteUrl}\">&#x200b;</a>" # To show preview, use a zero-width space
         )
 
+        inline_description = " ".join(
+            (
+                f"[{anime['type']}]" if anime['type'] else "",
+                f"({anime['averageScore']})" if anime['averageScore'] else "",
+                description_no_markup
+            )
+        )
+        
         # Add data to result
-        results.append({
+        results.append({ # InlineQueryResultArticle
             "type": "article",
             "id": str(idx),
             "title": title,
-            "input_message_content": {
+            "input_message_content": { # InputMessageContent
                 "message_text": msg_body,
-                "parse_mode": "html"
+                "parse_mode": "html",
+            },
+            "reply_markup": { # InlineKeyboardMarkup
+                "inline_keyboard": 
+                [
+                    [
+                        {
+                            "text": "View on Anilist",
+                            "url": siteUrl
+                        }
+                    ]
+                ],
             },
             "url": siteUrl,
-            "description": f'({anime["averageScore"] or "-"}) ' + description_no_markup,
+            "description": inline_description,
             "thumb_url": anime["coverImage"]["medium"],
         })
 
@@ -96,3 +108,18 @@ def handle_inline_query(data):
 
     if not res.ok:
         logging.error(f"Failed to answer inline query: {res.text}")
+        res.raise_for_status()
+
+
+def handle_normal_query(data):
+    pass
+    # Normal Query
+    # telegram_response = {
+    #     "chat_id": data["message"]["chat"]["id"],
+    #     "text": f"Hello from Anibot 3! ({str(context)})"
+    # }
+
+    # url = TELEGRAM_BASE_URL + "/sendMessage"
+    # res = requests.post(url, json=telegram_response)
+    # if not res.ok:
+    #     logging.error(f"Telegram failed to send the message: error code {res.status_code}, message: {res.text}")

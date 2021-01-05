@@ -26,6 +26,7 @@ package:
   exclude:
     - ./node_modules
     - ./local.py
+    - setWebhook
 
 plugins:
   - serverless-python-requirements
