@@ -1,4 +1,4 @@
-import os, json, requests, logging
+import os, json, requests, logging, random
 
 from anilist import getAnime
 from htmlParser import strip_tags
@@ -24,8 +24,10 @@ def trigger(event, context):
     # Inline query
     if data.get("inline_query"):
         handle_inline_query(data)
-    else: # Normal query
+    elif data.get("message"): # Normal query
         handle_normal_query(data)
+    else:
+        logging.warn("Received unknown request")
 
     # Remove
     return {
@@ -73,6 +75,9 @@ def handle_inline_query(data):
             f"<a href=\"{siteUrl}\">&#x200b;</a>" # To show preview, use a zero-width space
         )
 
+        if anime["isAdult"]:
+            msg_body += "\n(Details not shown for 18+ series)"
+
         inline_description = "".join(
             (
                 f"[{anime['format'].replace('_', ' ')}] " if anime['format'] else "",
@@ -81,13 +86,15 @@ def handle_inline_query(data):
             )
         )
         
+        client_id = 4628
+
         # Add data to result
         results.append({ # InlineQueryResultArticle
             "type": "article",
             "id": str(idx),
             "title": title_romaji + (f" ({title_english})" if title_english else ""),
             "input_message_content": { # InputMessageContent
-                "message_text": msg_body,
+                "message_text": (u'\u200b' if anime["isAdult"] else "") + msg_body,
                 "parse_mode": "html",
             },
             "reply_markup": { # InlineKeyboardMarkup
@@ -98,8 +105,14 @@ def handle_inline_query(data):
                             "text": "View on Anilist",
                             "url": siteUrl
                         }
+                    ],
+                    [
+                        {
+                            "text": "Log in via Anilist",
+                            "url": f"https://anilist.co/api/v2/oauth/authorize?client_id={client_id}&response_type=token"
+                        }
                     ]
-                ],
+                ]
             },
             "url": siteUrl,
             "description": inline_description,
@@ -119,14 +132,36 @@ def handle_inline_query(data):
 
 
 def handle_normal_query(data):
-    pass
-    # Normal Query
-    # telegram_response = {
-    #     "chat_id": data["message"]["chat"]["id"],
-    #     "text": f"Hello from Anibot 3! ({str(context)})"
-    # }
+    msg = data["message"]
+    if not msg.get("via_bot"):
+        return
 
-    # url = TELEGRAM_BASE_URL + "/sendMessage"
-    # res = requests.post(url, json=telegram_response)
-    # if not res.ok:
-    #     logging.error(f"Telegram failed to send the message: error code {res.status_code}, message: {res.text}")
+    if msg["via_bot"]["username"] != "theanibot":
+        return
+
+    if not msg["text"].startswith(u'\u200b'):
+        return
+
+    # if random.randint(1,10) > 2:
+    #     return
+
+    userName = msg["from"]["first_name"]
+
+    responses = (
+        "Mmm… you have interesting taste",
+        f"Ooo {userName}, that’s kinda kinky",
+        "Ah, I see that you’re a man of culture as well",
+        f"{userName}, I didn’t know you were into that",
+        "Do your parents know about this?",
+        f"Who told you about this one {userName}?",
+    )
+
+    telegram_response = {
+        "chat_id": msg["chat"]["id"],
+        "text": random.choice(responses)
+    }
+
+    url = TELEGRAM_BASE_URL + "/sendMessage"
+    res = requests.post(url, json=telegram_response)
+    if not res.ok:
+        logging.error(f"Telegram failed to send the message: error code {res.status_code}, message: {res.text}")

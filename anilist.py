@@ -16,6 +16,7 @@ def getAnime(name: str):
                 volumes
                 format
                 siteUrl
+                isAdult
                 coverImage {
                     medium
                 }
