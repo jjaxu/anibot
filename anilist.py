@@ -5,8 +5,8 @@ ANILIST_URL = 'https://graphql.anilist.co'
 def getAnime(name: str):
     querySearch = '''
     query ($searchInput: String) {
-        Page {
-            media (search: $searchInput, sort: SEARCH_MATCH) {
+        Page (page: 1, perPage: 20) {
+            media (search: $searchInput, sort: POPULARITY_DESC) {
                 id
                 description (asHtml: false)
                 status
