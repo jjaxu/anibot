@@ -17,10 +17,11 @@ def main():
             "error": str(err)
         }
 	
-@get('/')
+@get('/auth')
 def auth():
-    import pdb; pdb.set_trace()
     logging.info(bottle_request)
+    code = bottle_request.query.get("code")
+
 
 if __name__ == '__main__':  
     run(host='localhost', port=5000, debug=True)

@@ -11,10 +11,10 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(filename)s:%(fun
 
 # The entry point to the function
 # event should have the format { "body": json_obj }
-def trigger(event, context):
+def handler(event, context):
     data = event["body"]
 
-    logging.debug(f"Received event with content: {data}; context: {context}")
+    logging.info(f"Received event with content: {data}; context: {context}")
 
     body = {
         "message": "Hello Anibot 3!",
