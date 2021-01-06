@@ -63,15 +63,15 @@ def handle_inline_query(data):
         description_html = description.replace("<br>", "")
 
         siteUrl = anime["siteUrl"]
-        episodes_or_volumes_label = "Episodes" if anime["type"] == "ANIME" else "Volumes"
+        episodes_or_volumes_label = "episodes" if anime["type"] == "ANIME" else "volumes"
 
         msg_body = (
             f"&#x1F1EF;&#x1F1F5; <i>{title_japanese}</i>\n"
             f"{title_english_formatted}\n"
-            f"<b>Type:</b> {anime.get('type', '-').title()} ({anime.get('format', '-').replace('_', ' ')})\n"
-            f"<b>Status:</b> {anime.get('status', '-').title().replace('_', ' ') }\n"
-            f"<b>Average score:</b> {anime.get('averageScore', '-') }\n"
-            f"<b>{episodes_or_volumes_label}:</b> {anime.get(episodes_or_volumes_label.lower(), '-')}\n"
+            f"<b>Type:</b> {(anime['type'] or '-').title()} ({(anime['format'] or '-').replace('_', ' ')})\n"
+            f"<b>Status:</b> {(anime['status'] or '-').title().replace('_', ' ') }\n"
+            f"<b>Average score:</b> {anime['averageScore'] or '-' }\n"
+            f"<b>{episodes_or_volumes_label.title()}:</b> { (anime[episodes_or_volumes_label] or '-') }\n"
             f"<a href=\"{siteUrl}\">&#x200b;</a>" # To show preview, use a zero-width space
         )
 
@@ -106,12 +106,12 @@ def handle_inline_query(data):
                             "url": siteUrl
                         }
                     ],
-                    [
-                        {
-                            "text": "Log in via Anilist",
-                            "url": f"https://anilist.co/api/v2/oauth/authorize?client_id={client_id}&response_type=token"
-                        }
-                    ]
+                    # [
+                    #     {
+                    #         "text": "Log in via Anilist",
+                    #         "url": f"https://anilist.co/api/v2/oauth/authorize?client_id={client_id}&response_type=token"
+                    #     }
+                    # ]
                 ]
             },
             "url": siteUrl,

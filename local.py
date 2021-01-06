@@ -1,7 +1,7 @@
 import os, json, handler, logging, traceback
 
 from bottle import (  
-    run, post, response, request as bottle_request
+    run, post, route, get, response, request as bottle_request
 )
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(filename)s:%(funcName)s:%(asctime)s:%(message)s')
@@ -17,5 +17,10 @@ def main():
             "error": str(err)
         }
 	
+@get('/')
+def auth():
+    import pdb; pdb.set_trace()
+    logging.info(bottle_request)
+
 if __name__ == '__main__':  
     run(host='localhost', port=5000, debug=True)
