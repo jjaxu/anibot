@@ -10,6 +10,8 @@ provider: # Required to tell serverless this is an aws project, modify as needed
   logRetentionInDays: 14
   environment:
     ANIBOT_TOKEN: ${env:ANIBOT_TOKEN}
+    ANIBOT_CLIENT_ID: ${env:ANIBOT_CLIENT_ID}
+    ANIBOT_CLIENT_SECRET: ${env:ANIBOT_CLIENT_SECRET}
 
 # Configure your lambda function(s) here
 functions:
@@ -29,7 +31,6 @@ functions:
       - http:
           path: /auth
           method: get
-          async: true
 
 package:
   exclude:

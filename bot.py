@@ -4,6 +4,7 @@ from anilist import getAnime
 from htmlParser import strip_tags
 
 TOKEN = os.environ['ANIBOT_TOKEN']
+CLIENT_ID = os.environ['ANIBOT_CLIENT_ID']
 TELEGRAM_BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 MAX_ITEMS = 20
 
@@ -85,8 +86,6 @@ def handle_inline_query(data):
                 description_no_markup
             )
         )
-        
-        client_id = 4628
 
         # Add data to result
         results.append({ # InlineQueryResultArticle
@@ -106,12 +105,12 @@ def handle_inline_query(data):
                             "url": siteUrl
                         }
                     ],
-                    # [
-                    #     {
-                    #         "text": "Log in via Anilist",
-                    #         "url": f"https://anilist.co/api/v2/oauth/authorize?client_id={client_id}&response_type=token"
-                    #     }
-                    # ]
+                    [
+                        {
+                            "text": "Log in via Anilist",
+                            "url": f"https://anilist.co/api/v2/oauth/authorize?client_id={CLIENT_ID}&response_type=code"
+                        }
+                    ]
                 ]
             },
             "url": siteUrl,
