@@ -9,13 +9,15 @@ TELEGRAM_BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 MAX_ITEMS = 20
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(filename)s:%(funcName)s:%(asctime)s:%(message)s')
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 # The entry point to the function
 # event should have the format { "body": json_obj }
 def handler(event, context):
     data = event["body"]
 
-    logging.info(f"Received event with content: {data}; context: {context}")
+    logger.info(f"Received event with content: {data}; context: {context}")
 
     body = {
         "message": "Hello Anibot 3!",
@@ -28,12 +30,12 @@ def handler(event, context):
     elif data.get("message"): # Normal query
         handle_normal_query(data)
     else:
-        logging.warn("Received unknown request")
+        logger.warning("Received unknown request")
 
     # Remove
     return {
         "statusCode": 200,
-        "body": body
+        "body": json.dumps(body)
     }
 
 def handle_inline_query(data):
@@ -126,7 +128,7 @@ def handle_inline_query(data):
     res = requests.post(url, json=data)
 
     if not res.ok:
-        logging.error(f"Failed to answer inline query: {res.text}")
+        logger.error(f"Failed to answer inline query: {res.text}")
         res.raise_for_status()
 
 
@@ -163,4 +165,4 @@ def handle_normal_query(data):
     url = TELEGRAM_BASE_URL + "/sendMessage"
     res = requests.post(url, json=telegram_response)
     if not res.ok:
-        logging.error(f"Telegram failed to send the message: error code {res.status_code}, message: {res.text}")
+        logger.error(f"Telegram failed to send the message: error code {res.status_code}, message: {res.text}")

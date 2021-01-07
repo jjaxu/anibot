@@ -4,9 +4,12 @@ AUTH_URL = "https://anilist.co/api/v2/oauth/token"
 CLIENT_ID = os.environ['ANIBOT_CLIENT_ID']
 CLIENT_SECRET = os.environ['ANIBOT_CLIENT_SECRET']
 
+logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(filename)s:%(funcName)s:%(asctime)s:%(message)s')
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
 def handler(event, context):
-    logging.info(f"Received auth event: {event}")
-    print(event)
+    logger.info(f"Received auth event: {event}")
     
     data = {
         "client_id": CLIENT_ID,
@@ -16,12 +19,10 @@ def handler(event, context):
         "redirect_uri": f"https://{event['headers']['Host']}{event['requestContext']['path']}"
     }
     
-    print(data)
-    
     res = requests.post(AUTH_URL, json=data)
 
     if not res.ok:
-        logging.error(f"Failed to get auth token: {res.text}")
+        logger.error(f"Failed to get auth token: {res.text}")
         res.raise_for_status()
 
     res_json = res.json()
@@ -30,8 +31,7 @@ def handler(event, context):
     refresh_token = res_json["refresh_token"]
     expiration = res_json["expires_in"]
 
-    print("Successful authorized Anibot!")
-    print(res_json)
+    logger.info("Successful authorized Anibot!")
 
     # TODO: Store token in DB
 

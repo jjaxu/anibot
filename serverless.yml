@@ -12,6 +12,13 @@ provider: # Required to tell serverless this is an aws project, modify as needed
     ANIBOT_TOKEN: ${env:ANIBOT_TOKEN}
     ANIBOT_CLIENT_ID: ${env:ANIBOT_CLIENT_ID}
     ANIBOT_CLIENT_SECRET: ${env:ANIBOT_CLIENT_SECRET}
+    USERS_TABLE_NAME: !Ref usersTable
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:GetItem
+        - dynamodb:UpdateItem
+      Resource: !GetAtt usersTable.Arn
 
 # Configure your lambda function(s) here
 functions:
@@ -44,3 +51,18 @@ custom:
   pythonRequirements:
     slim: true
     pythonBin: python3
+
+resources:
+  Resources:
+    usersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: telegramId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: telegramId
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
