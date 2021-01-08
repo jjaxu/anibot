@@ -21,7 +21,10 @@ def main():
 def authentication():
     try:
         event = {
-            "queryStringParameters": {"code": bottle_request.query.get("code")},
+            "queryStringParameters": {
+                "code": bottle_request.query.get("code"),
+                "state": bottle_request.query.get("state"),
+            },
             "headers": {
                 "Host": bottle_request.urlparts.netloc
             },

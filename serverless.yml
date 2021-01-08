@@ -13,11 +13,12 @@ provider: # Required to tell serverless this is an aws project, modify as needed
     ANIBOT_CLIENT_ID: ${env:ANIBOT_CLIENT_ID}
     ANIBOT_CLIENT_SECRET: ${env:ANIBOT_CLIENT_SECRET}
     USERS_TABLE_NAME: !Ref usersTable
+    STAGE: ${self:provider.stage}
   iamRoleStatements:
     - Effect: Allow
       Action:
         - dynamodb:GetItem
-        - dynamodb:UpdateItem
+        - dynamodb:PutItem
       Resource: !GetAtt usersTable.Arn
 
 # Configure your lambda function(s) here

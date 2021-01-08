@@ -1,4 +1,4 @@
-import os, json, requests, logging, random
+import os, json, requests, logging, random, utils
 
 from anilist import getAnime
 from htmlParser import strip_tags
@@ -13,7 +13,6 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # The entry point to the function
-# event should have the format { "body": json_obj }
 def handler(event, context):
     data = event["body"]
 
@@ -39,8 +38,15 @@ def handler(event, context):
     }
 
 def handle_inline_query(data):
-    query_id = data["inline_query"]["id"]
-    query = data["inline_query"]["query"]
+    inline_query = data["inline_query"]
+    query_id = inline_query["id"]
+    query = inline_query["query"]
+    sender_id = str(inline_query["from"]["id"])
+    sender_first_name = inline_query["from"]["first_name"]
+    state_payload = utils.encode_to_base64_string(json.dumps({
+        "sender_id": sender_id,
+        "sender_name": sender_first_name
+    }))
 
     animeList = getAnime(query)
 
@@ -102,7 +108,7 @@ def handle_inline_query(data):
                 "inline_keyboard": 
                 [
                     [
-                        {
+                        { # InlineKeyboardButton
                             "text": "View on Anilist",
                             "url": siteUrl
                         }
@@ -110,7 +116,7 @@ def handle_inline_query(data):
                     [
                         {
                             "text": "Log in via Anilist",
-                            "url": f"https://anilist.co/api/v2/oauth/authorize?client_id={CLIENT_ID}&response_type=code"
+                            "url": f"https://anilist.co/api/v2/oauth/authorize?client_id={CLIENT_ID}&response_type=code&state={state_payload}"
                         }
                     ]
                 ]
@@ -134,6 +140,7 @@ def handle_inline_query(data):
 
 def handle_normal_query(data):
     msg = data["message"]
+
     if not msg.get("via_bot"):
         return
 
