@@ -42,12 +42,6 @@ def handle_inline_query(data):
     inline_query = data["inline_query"]
     query_id = inline_query["id"]
     query = inline_query["query"]
-    sender_id = str(inline_query["from"]["id"])
-    sender_first_name = inline_query["from"]["first_name"]
-    state_payload = utils.encode_to_base64_string(json.dumps({
-        "sender_id": sender_id,
-        "sender_name": sender_first_name
-    }))
 
     animeList = getAnime(query)
 
@@ -113,12 +107,6 @@ def handle_inline_query(data):
                             "text": "View on Anilist",
                             "url": siteUrl
                         }
-                    ],
-                    [
-                        {
-                            "text": "Log in via Anilist",
-                            "url": f"https://anilist.co/api/v2/oauth/authorize?client_id={CLIENT_ID}&response_type=code&state={state_payload}"
-                        }
                     ]
                 ]
             },
@@ -153,14 +141,43 @@ def handle_normal_query(data):
     if msg.startswith("/debug"):
         send_message(query.chat_id, vars(query))
     elif msg.startswith("/login"):
-        send_message(query.chat_id, "You're not currently logged in.")
+        handle_login_command(query)
+
+def handle_login_command(query: BotQuery):
+    if query.is_group:
+        send_message(query.chat_id, "Sorry, you cannot use this feature in group chats for security reasons.")
+        return
+    
+    sender_id = query.from_id
+    sender_first_name = query.user_first_name
+    state_payload = utils.encode_to_base64_string(json.dumps({
+        "sender_id": sender_id,
+        "sender_name": sender_first_name
+    }))
+
+    # TODO: Check DB for existing login info
+    is_logged_in = False
+
+    if not is_logged_in:
+        send_message(query.chat_id, "You're not currently logged in.", {
+            "reply_markup": { # InlineKeyboardMarkup
+                "inline_keyboard": 
+                [
+                    [
+                        {
+                            "text": "Log in via Anilist",
+                            "url": f"https://anilist.co/api/v2/oauth/authorize?client_id={CLIENT_ID}&response_type=code&state={state_payload}"
+                        }
+                    ]
+                ]
+            },
+        })
+    else:
+        send_message(query.chat_id, f"You're currently logged in as '...'")
 
 def handle_bot_response(msg):
     if not msg["text"].startswith(u'\u200b'):
         return
-
-    # if random.randint(1,10) > 2:
-    #     return
 
     userName = msg["from"]["first_name"]
 
@@ -175,14 +192,19 @@ def handle_bot_response(msg):
 
     send_message(msg["chat"]["id"], random.choice(responses))
 
-def send_message(chat_id: str, text: str):
-    telegram_response = {
+def send_message(chat_id: str, text: str, other:dict=None):
+    request_body = {
         "chat_id": chat_id,
         "text": text
     }
 
+    if other:
+        request_body.update(other)
+
+    print(request_body)
+
     url = TELEGRAM_BASE_URL + "/sendMessage"
-    res = requests.post(url, json=telegram_response)
+    res = requests.post(url, json=request_body)
     if not res.ok:
         logger.error(f"Telegram failed to send the message: error code {res.status_code}, message: {res.text}")
     
