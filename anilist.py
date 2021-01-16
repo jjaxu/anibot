@@ -44,3 +44,28 @@ def getAnime(name: str):
     result = json.loads(response.text)["data"]["Page"]["media"]
     logging.info(f'Anime results returned for query "{name}": {len(result)}')
     return result
+
+def getUserInfo(token: str) -> (int, str):
+    query = '''
+    query {
+        Viewer {
+            name
+            id
+        }
+    }
+    '''
+
+    variables = dict()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = requests.post(ANILIST_URL, headers=headers ,json={'query': query, 'variables': variables})
+    if not response.ok:
+        logging.error(f"Failed to get user info. Error: {response.text}")
+        return None
+
+    result = response.json()['data']['Viewer']
+    logging.info(f"Got user info from AniList: {result}")
+
+    
+    return (result['id'], result['name'])
+    

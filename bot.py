@@ -2,6 +2,7 @@ import os, json, requests, logging, random, utils
 
 from anilist import getAnime
 from htmlParser import strip_tags
+from botquery import BotQuery
 
 TOKEN = os.environ['ANIBOT_TOKEN']
 CLIENT_ID = os.environ['ANIBOT_CLIENT_ID']
@@ -79,7 +80,7 @@ def handle_inline_query(data):
             f"{title_english_formatted}\n"
             f"<b>Type:</b> {(anime['type'] or '-').title()} ({(anime['format'] or '-').replace('_', ' ')})\n"
             f"<b>Status:</b> {(anime['status'] or '-').title().replace('_', ' ') }\n"
-            f"<b>Average score:</b> {anime['averageScore'] or '-' }\n"
+            f"<b>Average score:</b> {anime['averageScore'] or '-' }%\n"
             f"<b>{episodes_or_volumes_label.title()}:</b> { (anime[episodes_or_volumes_label] or '-') }\n"
             f"<a href=\"{siteUrl}\">&#x200b;</a>" # To show preview, use a zero-width space
         )
@@ -141,12 +142,20 @@ def handle_inline_query(data):
 def handle_normal_query(data):
     msg = data["message"]
 
-    if not msg.get("via_bot"):
+    if msg.get("via_bot") and msg["via_bot"]["username"] == "theanibot":
+        handle_bot_response(msg)
         return
+    
+    query = BotQuery.parse_event(data)
+    bot_tag_index = query.message.find("@theanibot")
+    msg = query.message.replace("@theanibot", "")
 
-    if msg["via_bot"]["username"] != "theanibot":
-        return
+    if msg.startswith("/debug"):
+        send_message(query.chat_id, vars(query))
+    elif msg.startswith("/login"):
+        send_message(query.chat_id, "You're not currently logged in.")
 
+def handle_bot_response(msg):
     if not msg["text"].startswith(u'\u200b'):
         return
 
@@ -164,12 +173,16 @@ def handle_normal_query(data):
         f"Who told you about this one {userName}?",
     )
 
+    send_message(msg["chat"]["id"], random.choice(responses))
+
+def send_message(chat_id: str, text: str):
     telegram_response = {
-        "chat_id": msg["chat"]["id"],
-        "text": random.choice(responses)
+        "chat_id": chat_id,
+        "text": text
     }
 
     url = TELEGRAM_BASE_URL + "/sendMessage"
     res = requests.post(url, json=telegram_response)
     if not res.ok:
         logger.error(f"Telegram failed to send the message: error code {res.status_code}, message: {res.text}")
+    
