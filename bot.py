@@ -156,10 +156,31 @@ def handle_normal_query(data):
         handle_login_command(query)
     elif msg.startswith("/logout"):
         handle_logout_command(query)
+    elif msg.startswith("/watch"):
+        handle_watch_command(query)
+
+def handle_watch_command(query: BotQuery):
+    if query.is_group:
+        send_security_message(query.chat_id)
+        return
+
+    send_message(query.chat_id, "Here's your watchlist, use the buttons to increment the episodes watched.", {
+        "reply_markup": { # InlineKeyboardMarkup
+            "inline_keyboard": 
+            [
+                [
+                    {
+                        "text": "Attack on titan",
+                        "url": "https://t.me/theanibot"
+                    }
+                ]
+            ]
+        },
+    })
 
 def handle_login_command(query: BotQuery):
     if query.is_group:
-        send_message(query.chat_id, "Sorry, you cannot use this feature in group chats for security reasons.")
+        send_security_message(query.chat_id)
         return
     
     sender_id = query.from_id
@@ -212,7 +233,7 @@ def handle_login_command(query: BotQuery):
 
 def handle_logout_command(query: BotQuery):
     if query.is_group:
-        send_message(query.chat_id, "Sorry, you cannot use this feature in group chats for security reasons.")
+        send_security_message(query.chat_id)
         return
     logout_user(query.from_id, query.chat_id)
 
@@ -242,10 +263,11 @@ def handle_bot_response(msg):
 
     send_message(msg["chat"]["id"], random.choice(responses))
 
-def send_message(chat_id: str, text: str, other:dict=None):
+def send_message(chat_id: str, text: str, other:dict=None, silent=True):
     request_body = {
         "chat_id": chat_id,
-        "text": text
+        "text": text,
+        "disable_notification": silent
     }
 
     if other:
@@ -260,3 +282,21 @@ def handle_callback_query(query: BotQuery):
     cb_query = query.callback_query
     if cb_query.callback_data == "/logout":
         logout_user(cb_query.callback_from_id, cb_query.chat_id)
+
+def get_security_message() -> str:
+    return "Sorry, you cannot use this feature in group chats for security reasons. Please DM me instead!"
+
+def send_security_message(chat_id: str):
+    send_message(chat_id, get_security_message(), {
+    "reply_markup": { # InlineKeyboardMarkup
+        "inline_keyboard": 
+            [
+                [
+                    {
+                        "text": "Talk to bot",
+                        "url": "https://t.me/theanibot"
+                    }
+                ]
+            ]
+        },
+    })
