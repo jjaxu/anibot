@@ -19,6 +19,7 @@ PARSE_MODE_KEY = "parse_mode"
 PHOTO_KEY = "photo"
 
 GROUP_STR = "group"
+SUPERGROUP_STR = "supergroup"
 PRIVATE_STR = "private"
 
 class BotQuery:
@@ -48,6 +49,7 @@ class BotQuery:
         result.message = data.get(msg_key, empty).get(TEXT_KEY)
         result.message_id = data.get(msg_key, empty).get(MESSAGE_ID_KEY)
         result.callback_data = data.get(DATA_KEY)
+        result.callback_from_id = data.get(FROM_KEY, empty).get(ID_KEY)
         result.chat_id = data.get(msg_key, empty).get(CHAT_KEY, empty).get(ID_KEY)
         result.chat_title = data.get(msg_key, empty).get(CHAT_KEY, empty).get(TITLE_KEY)
         result.from_id = data.get(msg_key, empty).get(FROM_KEY, empty).get(ID_KEY)
@@ -56,7 +58,11 @@ class BotQuery:
         result.user_username = data.get(msg_key, empty).get(FROM_KEY, empty).get(USERNAME_KEY)
 
         result.is_private = data.get(msg_key, empty).get(CHAT_KEY, empty).get(TYPE_KEY) == PRIVATE_STR
-        result.is_group = data.get(msg_key, empty).get(CHAT_KEY, empty).get(TYPE_KEY) == GROUP_STR
+
+        group_type = data.get(msg_key, empty).get(CHAT_KEY, empty).get(TYPE_KEY)
+        
+        result.is_group = group_type == GROUP_STR or group_type == SUPERGROUP_STR
+        result.is_supergroup = group_type == SUPERGROUP_STR
         result.is_private = data.get(msg_key, empty).get(CHAT_KEY, empty).get(TYPE_KEY) == PRIVATE_STR
 
         if not (
@@ -70,6 +76,7 @@ class BotQuery:
     def __init__(self):
         self.is_private = False
         self.is_group = False
+        self.is_supergroup = False
         self.is_edited = False
 
         # Inline query
@@ -81,6 +88,7 @@ class BotQuery:
         self.has_callback_query = False
         self.callback_query = None
         self.callback_data = None
+        self.callback_from_id = None
 
         # Message content
         self.message = None
@@ -91,3 +99,6 @@ class BotQuery:
         self.user_last_name = None
         self.user_username = None
         self.chat_title = None
+
+    def __repr__(self):
+        return str(vars(self))

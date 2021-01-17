@@ -1,4 +1,4 @@
-import os, json, requests, logging, random, utils
+import os, json, requests, logging, random, utils, dynamo
 
 from anilist import getAnime
 from htmlParser import strip_tags
@@ -23,14 +23,22 @@ def handler(event, context):
         "message": "Hello Anibot 3!",
         "request": data
     }
+
+    try:
+        query = BotQuery.parse_event(data)
+    except Exception as err:
+        logger.error(f"Unsupported query: {err}")
+        return
     
     # Inline query
-    if data.get("inline_query"):
+    if query.is_inline_query:
         handle_inline_query(data)
-    elif data.get("message"): # Normal query
+    elif query.has_callback_query:
+        handle_callback_query(query)
+    elif query.message: # Normal query
         handle_normal_query(data)
     else:
-        logger.warning("Received unknown request")
+        logger.warning("Received unknown request, skipping...")
 
     # Remove
     return {
@@ -134,14 +142,21 @@ def handle_normal_query(data):
         handle_bot_response(msg)
         return
     
-    query = BotQuery.parse_event(data)
-    bot_tag_index = query.message.find("@theanibot")
+    try:
+        query = BotQuery.parse_event(data)
+    except Exception as err:
+        logger.error(f"Unsupported query: {err}")
+        return
+    
     msg = query.message.replace("@theanibot", "")
 
     if msg.startswith("/debug"):
-        send_message(query.chat_id, vars(query))
+        return
+        # send_message(query.chat_id, vars(query))
     elif msg.startswith("/login"):
         handle_login_command(query)
+    elif msg.startswith("/logout"):
+        handle_logout_command(query)
 
 def handle_login_command(query: BotQuery):
     if query.is_group:
@@ -156,7 +171,15 @@ def handle_login_command(query: BotQuery):
     }))
 
     # TODO: Check DB for existing login info
-    is_logged_in = False
+    userInfo = None
+    try:
+        userInfo = dynamo.get_item(sender_id)
+    except Exception as err:
+        logging.error(f"Failed to fetch user info from dynamodb. Error: {err}")
+        send_message(query.chat_id, f"This feature is currently unavilable, please check back later. ")
+        return
+
+    is_logged_in = userInfo is not None
 
     if not is_logged_in:
         send_message(query.chat_id, "You're not currently logged in.", {
@@ -173,7 +196,35 @@ def handle_login_command(query: BotQuery):
             },
         })
     else:
-        send_message(query.chat_id, f"You're currently logged in as '...'")
+        send_message(query.chat_id, f"You're currently logged in as '{userInfo['aniListUserName']}'. You can use /logout to logout.", {
+            "reply_markup": { # InlineKeyboardMarkup
+                "inline_keyboard": 
+                [
+                    [
+                        {
+                            "text": "Logout",
+                            "callback_data": "/logout"
+                        }
+                    ]
+                ]
+            },
+        })
+
+
+def handle_logout_command(query: BotQuery):
+    if query.is_group:
+        send_message(query.chat_id, "Sorry, you cannot use this feature in group chats for security reasons.")
+        return
+    logout_user(query.from_id, query.chat_id)
+
+def logout_user(telegram_id: str, chat_id: str):
+    try:
+        dynamo.delete_item(telegram_id)
+    except Exception as err:
+        logging.error(f"Failed to delete user info from dynamodb. Error: {err}")
+        send_message(chat_id, f"This feature is currently unavilable, please check back later. ")
+        return
+    send_message(chat_id, f"Successful logged out! You can use /login to login again.")
 
 def handle_bot_response(msg):
     if not msg["text"].startswith(u'\u200b'):
@@ -201,10 +252,12 @@ def send_message(chat_id: str, text: str, other:dict=None):
     if other:
         request_body.update(other)
 
-    print(request_body)
-
     url = TELEGRAM_BASE_URL + "/sendMessage"
     res = requests.post(url, json=request_body)
     if not res.ok:
         logger.error(f"Telegram failed to send the message: error code {res.status_code}, message: {res.text}")
     
+def handle_callback_query(query: BotQuery):
+    cb_query = query.callback_query
+    if cb_query.callback_data == "/logout":
+        logout_user(cb_query.callback_from_id, cb_query.chat_id)

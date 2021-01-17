@@ -1,4 +1,4 @@
-import requests, logging, os, json, dynamo, utils
+import requests, logging, os, json, dynamo, utils, anilist
 
 AUTH_URL = "https://anilist.co/api/v2/oauth/token"
 CLIENT_ID = os.environ['ANIBOT_CLIENT_ID']
@@ -48,18 +48,32 @@ def handler(event, context):
 
     logger.info(f"Successfully authorized Anibot for user: {sender_data}")
 
+    # Verify token
+    userInfo = anilist.getUserInfo(access_token)
+    if not userInfo:
+        logger.error("Failed verify access token")
+        return {
+            "statusCode": 503,
+            "body": json.dumps({"message": f"Failed to authorize Anibot, the access token may be expired."})
+        }
+
+    aniList_id, aniList_userName = userInfo
+        
     # Store in DB
+    # TODO: check existing token first
     try:
-        dynamo.put_item(sender_id, access_token)
+        dynamo.put_item(sender_id, access_token, aniList_id, aniList_userName)
     except Exception as err:
         logger.error(f"Failed save data to dynamoDB. Error: {err}")
         return {
             "statusCode": 503,
-            "body": json.dumps({"message": f"Failed to authorize Anibot as '{sender_name}', please try again later."})
+            "body": json.dumps({"message": f"Failed to authorize Anibot for '{sender_name}', please try again later."})
         }
 
     
+    logger.info(f"Successfully authorized Anibot for user: {sender_data}")
+
     return {
         "statusCode": 200,
-        "body": json.dumps({"message": f"Successfully authorized Anibot as '{sender_name}'! You may now close this window and return to Telegram."})
+        "body": json.dumps({"message": f"Successfully authorized Anibot for '{userInfo[1]}'! You may now close this window and return to Telegram."})
     }

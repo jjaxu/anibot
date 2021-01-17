@@ -19,6 +19,7 @@ provider: # Required to tell serverless this is an aws project, modify as needed
       Action:
         - dynamodb:GetItem
         - dynamodb:PutItem
+        - dynamodb:DeleteItem
       Resource: !GetAtt usersTable.Arn
 
 # Configure your lambda function(s) here
