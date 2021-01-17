@@ -32,7 +32,7 @@ def handler(event, context):
     
     # Inline query
     if query.is_inline_query:
-        handle_inline_query(data)
+        handle_inline_query(query)
     elif query.has_callback_query:
         handle_callback_query(query)
     elif query.message: # Normal query
@@ -46,10 +46,9 @@ def handler(event, context):
         "body": json.dumps(body)
     }
 
-def handle_inline_query(data):
-    inline_query = data["inline_query"]
-    query_id = inline_query["id"]
-    query = inline_query["query"]
+def handle_inline_query(query: BotQuery):
+    query_id = query.inline_query_id
+    query = query.inline_query_text
 
     animeList = getAnime(query)
 

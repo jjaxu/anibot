@@ -26,5 +26,3 @@ def get_item(telegram_id: str):
 def delete_item(telegram_id: str):
     table = get_users_table()
     res = table.delete_item(Key={ 'telegramId': str(telegram_id) })
-    print(res)
-
