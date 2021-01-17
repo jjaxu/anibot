@@ -69,3 +69,41 @@ def getUserInfo(token: str) -> (int, str):
     
     return (result['id'], result['name'])
     
+
+# Get's the list of status "WATCHING"
+def getAnimeList(user_id: int) -> list:
+    query = '''
+    query ($userId: Int) {
+        Page {
+            mediaList (userId: $userId, status: CURRENT, type: ANIME){
+                progress
+                media {
+                    id
+                    episodes
+                    title {
+                        romaji
+                        english
+                        native
+                    }
+                }
+            }
+        }
+    }
+    '''
+
+    variables = {
+        "userId": int(user_id)
+    }
+
+    response = requests.post(ANILIST_URL, json={'query': query, 'variables': variables})
+    if not response.ok:
+        logging.error(f"Failed to get user's anime list. Error: {response.text}")
+        return []
+
+    result = response.json()['data']['Page']['mediaList']
+    logging.info(f"Got user info from AniList: {result}")
+
+    return result
+
+def increaseProgress(access_token: str, media_id: int):
+    pass

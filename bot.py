@@ -1,6 +1,6 @@
 import os, json, requests, logging, random, utils, dynamo
 
-from anilist import getAnime
+from anilist import getAnime, getAnimeList, increaseProgress
 from htmlParser import strip_tags
 from botquery import BotQuery
 
@@ -164,17 +164,52 @@ def handle_watch_command(query: BotQuery):
         send_security_message(query.chat_id)
         return
 
+    userInfo = None
+    try:
+        userInfo = dynamo.get_item(query.from_id)
+    except Exception as err:
+        logging.error(f"Failed to fetch user info from dynamodb. Error: {err}")
+        send_message(query.chat_id, f"This feature is currently unavilable, please check back later.")
+        return
+
+    if userInfo is None:
+        send_message(query.chat_id, "Please log in first! (via the /login command or the button below)", {
+            "reply_markup": { # InlineKeyboardMarkup
+                "inline_keyboard": 
+                [
+                    [
+                        {
+                            "text": "Log in",
+                            "url": get_login_url(query.from_id, query.user_first_name)
+                        }
+                    ]
+                ]
+            }})
+        return
+
+    mediaList = getAnimeList(userInfo["aniListId"])
+    buttons = []
+    
+    for item in mediaList:
+        progress = item['progress']
+        anime = item['media']
+        episodes = anime['episodes']
+        title = anime['title']['english']
+
+        buttons.append(
+            [
+                {
+                    "text": f"{title} ({progress}/{episodes})",
+                    "callback_data": "/updateProgress" + json.dumps({
+                        "media_id": anime['id']
+                    })
+                }
+            ]
+        )
+    
     send_message(query.chat_id, "Here's your watchlist, use the buttons to increment the episodes watched.", {
         "reply_markup": { # InlineKeyboardMarkup
-            "inline_keyboard": 
-            [
-                [
-                    {
-                        "text": "Attack on titan",
-                        "url": "https://t.me/theanibot"
-                    }
-                ]
-            ]
+            "inline_keyboard": buttons
         },
     })
 
@@ -185,18 +220,13 @@ def handle_login_command(query: BotQuery):
     
     sender_id = query.from_id
     sender_first_name = query.user_first_name
-    state_payload = utils.encode_to_base64_string(json.dumps({
-        "sender_id": sender_id,
-        "sender_name": sender_first_name
-    }))
 
-    # TODO: Check DB for existing login info
     userInfo = None
     try:
         userInfo = dynamo.get_item(sender_id)
     except Exception as err:
         logging.error(f"Failed to fetch user info from dynamodb. Error: {err}")
-        send_message(query.chat_id, f"This feature is currently unavilable, please check back later. ")
+        send_message(query.chat_id, f"This feature is currently unavilable, please check back later.")
         return
 
     is_logged_in = userInfo is not None
@@ -209,20 +239,20 @@ def handle_login_command(query: BotQuery):
                     [
                         {
                             "text": "Log in via Anilist",
-                            "url": f"https://anilist.co/api/v2/oauth/authorize?client_id={CLIENT_ID}&response_type=code&state={state_payload}"
+                            "url": get_login_url(sender_id, sender_first_name)
                         }
                     ]
                 ]
             },
         })
     else:
-        send_message(query.chat_id, f"You're currently logged in as '{userInfo['aniListUserName']}'. You can use /logout to logout.", {
+        send_message(query.chat_id, f"You're currently logged in as '{userInfo['aniListUserName']}'. You can use /logout to log out.", {
             "reply_markup": { # InlineKeyboardMarkup
                 "inline_keyboard": 
                 [
                     [
                         {
-                            "text": "Logout",
+                            "text": "Log out",
                             "callback_data": "/logout"
                         }
                     ]
@@ -242,9 +272,9 @@ def logout_user(telegram_id: str, chat_id: str):
         dynamo.delete_item(telegram_id)
     except Exception as err:
         logging.error(f"Failed to delete user info from dynamodb. Error: {err}")
-        send_message(chat_id, f"This feature is currently unavilable, please check back later. ")
+        send_message(chat_id, f"This feature is currently unavilable, please check back later.")
         return
-    send_message(chat_id, f"Successful logged out! You can use /login to login again.")
+    send_message(chat_id, f"Successful logged out! You can use /login to log in again.")
 
 def handle_bot_response(msg):
     if not msg["text"].startswith(u'\u200b'):
@@ -282,6 +312,12 @@ def handle_callback_query(query: BotQuery):
     cb_query = query.callback_query
     if cb_query.callback_data == "/logout":
         logout_user(cb_query.callback_from_id, cb_query.chat_id)
+    elif cb_query.callback_data.startswith("/updateProgress"):
+        data = json.loads(cb_query.callback_data[len("/updateProgress"):])
+        media_id = data['media_id']
+        access_token = "abc123" # TODO: fetch from DB
+        increaseProgress(access_token, media_id)
+
 
 def get_security_message() -> str:
     return "Sorry, you cannot use this feature in group chats for security reasons. Please DM me instead!"
@@ -293,10 +329,17 @@ def send_security_message(chat_id: str):
             [
                 [
                     {
-                        "text": "Talk to bot",
+                        "text": "Go to bot's DM",
                         "url": "https://t.me/theanibot"
                     }
                 ]
             ]
         },
     })
+
+def get_login_url(sender_id: str, sender_name: str) -> str:
+    state_payload = utils.encode_to_base64_string(json.dumps({
+        "sender_id": sender_id,
+        "sender_name": sender_name
+    }))
+    return f"https://anilist.co/api/v2/oauth/authorize?client_id={CLIENT_ID}&response_type=code&state={state_payload}"
