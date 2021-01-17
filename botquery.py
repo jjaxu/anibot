@@ -49,6 +49,7 @@ class BotQuery:
         result.message = data.get(msg_key, empty).get(TEXT_KEY)
         result.message_id = data.get(msg_key, empty).get(MESSAGE_ID_KEY)
         result.callback_data = data.get(DATA_KEY)
+        result.callback_query_id = data.get(ID_KEY)
         result.callback_from_id = data.get(FROM_KEY, empty).get(ID_KEY)
         result.chat_id = data.get(msg_key, empty).get(CHAT_KEY, empty).get(ID_KEY)
         result.chat_title = data.get(msg_key, empty).get(CHAT_KEY, empty).get(TITLE_KEY)
@@ -85,10 +86,11 @@ class BotQuery:
         self.inline_query_text = None
 
         # Callback query
-        self.has_callback_query = False
-        self.callback_query = None
-        self.callback_data = None
-        self.callback_from_id = None
+        self.has_callback_query: bool = False
+        self.callback_query: BotQuery = None
+        self.callback_query_id: str = None
+        self.callback_data: str = None
+        self.callback_from_id: str = None
 
         # Message content
         self.message = None

@@ -187,14 +187,14 @@ def handle_watch_command(query: BotQuery):
             }})
         return
 
-    mediaList = getAnimeList(userInfo["aniListId"])
+    mediaList = sorted(getAnimeList(userInfo["aniListId"]), key=lambda x: x['media']['title']['romaji'])
     buttons = []
     
     for item in mediaList:
         progress = item['progress']
         anime = item['media']
         episodes = anime['episodes']
-        title = anime['title']['english']
+        title = anime['title']['romaji'] or anime['title']['english']
 
         buttons.append(
             [
@@ -207,7 +207,10 @@ def handle_watch_command(query: BotQuery):
             ]
         )
     
-    send_message(query.chat_id, "Here's your watchlist, use the buttons to increment the episodes watched.", {
+    send_message(query.chat_id, (
+        "Here's your watchlist, use the buttons to increment the episodes watched." if len(buttons) > 0 else
+        "Your watchlist is currently empty, you can add them from AniList."
+        ), {
         "reply_markup": { # InlineKeyboardMarkup
             "inline_keyboard": buttons
         },
@@ -317,6 +320,17 @@ def handle_callback_query(query: BotQuery):
         media_id = data['media_id']
         access_token = "abc123" # TODO: fetch from DB
         increaseProgress(access_token, media_id)
+
+        # Gate finished anime
+        request_body = {
+            "callback_query_id": cb_query.callback_query_id,
+            "text": "This feature is still in development, check back later!",
+        }
+
+        url = TELEGRAM_BASE_URL + "/answerCallbackQuery"
+        res = requests.post(url, json=request_body)
+        if not res.ok:
+            logger.error(f"Telegram failed to send the message: error code {res.status_code}, message: {res.text}")
 
 
 def get_security_message() -> str:
