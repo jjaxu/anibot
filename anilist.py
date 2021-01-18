@@ -100,12 +100,59 @@ def getAnimeList(user_id: int) -> list:
 
     return result
 
-def increaseProgress(access_token: str, media_id: int) -> dict:
-    return None
+
+# access_token is technically optional, but including it allows the 
+# user to update private lists
+def getMediaInfo(user_id: int, media_id: int, access_token: str=None):
+    query = '''
+    query ($userId: Int, $mediaId: Int) {
+        MediaList (userId: $userId, mediaId: $mediaId){
+            progress
+            media {
+                id
+                episodes
+                title {
+                    userPreferred
+                }
+            }
+        }
+    }
+    '''
     
+    variables = {
+        "userId": int(user_id),
+        "mediaId": int(media_id)
+    }
+
+    result = send_graphql_request(query, variables, access_token)
+    if not result:
+        logging.error(f"Failed to get media info of userId: {user_id}, mediaId: {media_id}")
+        return None
+
+    return result["MediaList"]
 
 
-def setProgress():
+def increaseProgress(access_token: str, user_id: int, media_id: int) -> dict:
+    currentInfo = getMediaInfo(user_id, media_id, access_token)
+    if not currentInfo:
+        return None
+
+    current_progress = currentInfo['progress']
+    total_progress = currentInfo['media']['episodes']
+
+    if current_progress == total_progress:
+        return {
+            "alreadyCompleted": True
+        }
+
+    updateResult = setProgress(access_token, media_id, current_progress + 1)
+    if not updateResult:
+        logging.error("Failed increment progress")
+        return None
+
+    return updateResult
+
+def setProgress(access_token: str, media_id: int, progress: int):
     query = '''
     mutation($mediaId: Int, $progress: Int) {
         SaveMediaListEntry(mediaId: $mediaId, progress: $progress) {
@@ -121,6 +168,19 @@ def setProgress():
     }
     '''
 
+    variables = {
+        "mediaId": int(media_id),
+        "progress": int(progress)
+    }
+
+    result = send_graphql_request(query, variables, access_token)
+    if not result:
+        logging.error(f"Failed to set progress to {progress} for media {media_id}")
+        return None
+
+    result = result["SaveMediaListEntry"]
+    logging.info(f"Set progress for anime: {result}")
+    return result
 
 def send_graphql_request(query: dict, variables: dict=dict(), token: str=None) -> dict:
     headers = {"Authorization": f"Bearer {token}"} if token else None

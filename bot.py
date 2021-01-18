@@ -169,7 +169,7 @@ def handle_watch_command(query: BotQuery):
         userInfo = dynamo.get_item(query.from_id)
     except Exception as err:
         logging.error(f"Failed to fetch user info from dynamodb. Error: {err}")
-        send_message(query.chat_id, f"This feature is currently unavilable, please check back later.")
+        send_message(query.chat_id, get_unavailable_message())
         return
 
     if userInfo is None:
@@ -189,21 +189,21 @@ def handle_watch_command(query: BotQuery):
 
     mediaList = sorted(getAnimeList(userInfo["aniListId"]), key=lambda x: x['media']['title']['userPreferred'])
     if mediaList is None:
-        send_message(query.chat_id, f"This feature is currently unavilable, please check back later.")
+        send_message(query.chat_id, get_unavailable_message())
         return
 
     buttons = []
     
     for item in mediaList:
-        progress = item['progress']
+        # progress = item['progress']
         anime = item['media']
-        episodes = anime['episodes']
+        # episodes = anime['episodes']
         title = anime['title']['userPreferred']
 
         buttons.append(
             [
                 {
-                    "text": f"{title} ({progress}/{episodes})",
+                    "text": f"{title}",
                     "callback_data": "/updateProgress" + json.dumps({
                         "media_id": anime['id']
                     })
@@ -233,7 +233,7 @@ def handle_login_command(query: BotQuery):
         userInfo = dynamo.get_item(sender_id)
     except Exception as err:
         logging.error(f"Failed to fetch user info from dynamodb. Error: {err}")
-        send_message(query.chat_id, f"This feature is currently unavilable, please check back later.")
+        send_message(query.chat_id, get_unavailable_message())
         return
 
     is_logged_in = userInfo is not None
@@ -279,7 +279,7 @@ def logout_user(telegram_id: str, chat_id: str):
         dynamo.delete_item(telegram_id)
     except Exception as err:
         logging.error(f"Failed to delete user info from dynamodb. Error: {err}")
-        send_message(chat_id, f"This feature is currently unavilable, please check back later.")
+        send_message(chat_id, get_unavailable_message())
         return
     send_message(chat_id, f"Successful logged out! You can use /login to log in again.")
 
@@ -329,18 +329,34 @@ def handle_callback_query(query: BotQuery):
             userInfo = dynamo.get_item(sender_id)
         except Exception as err:
             logging.error(f"Failed to fetch user info from dynamodb. Error: {err}")
-            send_message(query.chat_id, f"This feature is currently unavilable, please check back later.")
+            send_message(query.chat_id, get_unavailable_message())
             return
 
+        user_id = userInfo['aniListId']
         access_token = userInfo['accessToken']
 
-        # TODO: WIP
-        result = increaseProgress(access_token, media_id)
-
-        # Gate finished anime
+    
+        updateResult = increaseProgress(access_token, user_id, media_id)
+        
+        response_text = ""
+        
+        if not updateResult: # Error
+            response_text = get_unavailable_message()
+        elif updateResult.get("alreadyCompleted"): # Already done, no updates done
+            response_text = "You have already completed this series"
+        else:
+            newProgress = updateResult['progress']
+            totalEpisodes = updateResult['media']['episodes']
+            mediaTitle = updateResult['media']['title']['userPreferred']
+            if newProgress == totalEpisodes: # Updated and now complete
+                 response_text = f"Updated! You have completed '{mediaTitle}' with progress {newProgress}/{totalEpisodes}"
+            else: # Updated and still in progress
+                response_text = f"Updated! Your new progress for '{mediaTitle}' is now: {newProgress}/{totalEpisodes}"
+    
         request_body = {
             "callback_query_id": cb_query.callback_query_id,
-            "text": "This feature is still in development, check back later!",
+            "text": response_text,
+            "show_alert": True
         }
 
         url = TELEGRAM_BASE_URL + "/answerCallbackQuery"
@@ -351,6 +367,9 @@ def handle_callback_query(query: BotQuery):
 
 def get_security_message() -> str:
     return "Sorry, you cannot use this feature in group chats for security reasons. Please DM me instead!"
+
+def get_unavailable_message() -> str:
+    return "This feature is currently unavilable, please check back later."
 
 def send_security_message(chat_id: str):
     send_message(chat_id, get_security_message(), {
