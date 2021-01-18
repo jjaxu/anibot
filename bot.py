@@ -1,6 +1,5 @@
-import os, json, requests, logging, random, utils, dynamo
+import os, json, requests, logging, random, utils, dynamo, anilist
 
-from anilist import getAnime, getAnimeList, increaseProgress, getUserInfo
 from htmlParser import strip_tags
 from botquery import BotQuery
 
@@ -50,7 +49,7 @@ def handle_inline_query(query: BotQuery):
     query_id = query.inline_query_id
     query = query.inline_query_text
 
-    animeList = getAnime(query)
+    animeList = anilist.getAnime(query)
 
     results = []
 
@@ -133,7 +132,6 @@ def handle_inline_query(query: BotQuery):
         logger.error(f"Failed to answer inline query: {res.text}")
         res.raise_for_status()
 
-
 def handle_normal_query(data):
     msg = data["message"]
 
@@ -187,7 +185,7 @@ def handle_watch_command(query: BotQuery):
             }})
         return
 
-    mediaList = getAnimeList(userInfo["aniListId"], userInfo["accessToken"])
+    mediaList = anilist.getAnimeList(userInfo["aniListId"], userInfo["accessToken"])
     if mediaList is None:
         send_message(query.chat_id, get_unavailable_message())
         return
@@ -199,15 +197,15 @@ def handle_watch_command(query: BotQuery):
     buttons = []
     
     for item in mediaList:
-        # progress = item['progress']
+        progress = item['progress']
         anime = item['media']
-        # episodes = anime['episodes']
+        episodes = anime['episodes']
         title = anime['title']['userPreferred']
 
         buttons.append(
             [
                 {
-                    "text": f"{title}",
+                    "text": f"{title} ({progress}/{episodes})",
                     "callback_data": "/updateProgress" + json.dumps({
                         "media_id": anime['id']
                     })
@@ -241,7 +239,7 @@ def handle_login_command(query: BotQuery):
         return
 
     # valid login if user info is found in the DB and the credentials are valid
-    is_logged_in = userInfo is not None and getUserInfo(userInfo["accessToken"]) is not None
+    is_logged_in = userInfo is not None and anilist.getUserInfo(userInfo["accessToken"]) is not None
 
     if not is_logged_in:
         send_message(query.chat_id, "You're not currently logged in.", {
@@ -343,7 +341,7 @@ def handle_callback_query(query: BotQuery):
         else:
             user_id = userInfo['aniListId']
             access_token = userInfo['accessToken']
-            updateResult = increaseProgress(access_token, user_id, media_id)
+            updateResult = anilist.increaseProgress(access_token, user_id, media_id)
         
             if not updateResult: # Error
                 response_text = get_unavailable_message()
@@ -359,7 +357,34 @@ def handle_callback_query(query: BotQuery):
                     response_text = f"Updated! You have completed '{mediaTitle}' with progress {newProgress}/{totalEpisodes}"
                 else: # Updated and still in progress
                     response_text = f"Updated! Your new progress for '{mediaTitle}' is now: {newProgress}/{totalEpisodes}"
-    
+
+                new_inline_keyboard = cb_query.reply_markup['inline_keyboard']
+                for keyboard_arr in new_inline_keyboard:
+                    kb = keyboard_arr[0]
+                    kb_data = json.loads(kb["callback_data"][len("/updateProgress"):])
+                    kb_media_id = kb_data['media_id']
+                    if kb_media_id == media_id:
+                        kb["text"] = f"{mediaTitle} ({newProgress}/{totalEpisodes})"
+                        break
+
+
+                # Edit the message text
+                edit_msg_url = TELEGRAM_BASE_URL + "/editMessageText"
+
+                edit_data = {
+                    "chat_id": cb_query.chat_id,
+                    "message_id": cb_query.message_id,
+                    "text": cb_query.message,
+                    "reply_markup": {
+                        "inline_keyboard": new_inline_keyboard,
+                    }
+                }
+
+                res = requests.post(edit_msg_url, json=edit_data)
+
+                if not res.ok:
+                    logger.error(f"Failed to edit watchlist data: {res.text}")
+
         request_body = {
             "callback_query_id": cb_query.callback_query_id,
             "text": response_text,

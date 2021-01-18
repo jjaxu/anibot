@@ -17,6 +17,7 @@ LAST_NAME_KEY = "last_name"
 USERNAME_KEY = "username"
 PARSE_MODE_KEY = "parse_mode"
 PHOTO_KEY = "photo"
+REPLY_MARKUP_KEY = "reply_markup"
 
 GROUP_STR = "group"
 SUPERGROUP_STR = "supergroup"
@@ -57,6 +58,7 @@ class BotQuery:
         result.user_first_name = data.get(msg_key, empty).get(FROM_KEY, empty).get(FIRST_NAME_KEY)
         result.user_last_name = data.get(msg_key, empty).get(FROM_KEY, empty).get(LAST_NAME_KEY)
         result.user_username = data.get(msg_key, empty).get(FROM_KEY, empty).get(USERNAME_KEY)
+        result.reply_markup = data.get(msg_key, empty).get(REPLY_MARKUP_KEY)
 
         result.is_private = data.get(msg_key, empty).get(CHAT_KEY, empty).get(TYPE_KEY) == PRIVATE_STR
 
@@ -101,6 +103,9 @@ class BotQuery:
         self.user_last_name = None
         self.user_username = None
         self.chat_title = None
+
+        # Reply Markup
+        self.reply_markup: dict = None
 
     def __repr__(self):
         return str(vars(self))
