@@ -146,8 +146,9 @@ def handle_normal_query(data):
         return
     
     msg = query.message.replace("@theanibot", "")
-
-    if msg.startswith("/debug"):
+    if msg.startswith("/start"):
+        send_message(query.chat_id, "Hello! Anibot at your service! You can search by typing @theanibot... or type '/' to see all the available commands.")
+    elif msg.startswith("/debug"):
         return
         # send_message(query.chat_id, vars(query))
     elif msg.startswith("/login"):
@@ -205,7 +206,7 @@ def handle_watch_command(query: BotQuery):
         buttons.append(
             [
                 {
-                    "text": f"{title} ({progress}/{episodes})",
+                    "text": f"[{progress}/{episodes}] {title}",
                     "callback_data": "/updateProgress" + json.dumps({
                         "media_id": anime['id']
                     })
@@ -364,7 +365,7 @@ def handle_callback_query(query: BotQuery):
                     kb_data = json.loads(kb["callback_data"][len("/updateProgress"):])
                     kb_media_id = kb_data['media_id']
                     if kb_media_id == media_id:
-                        kb["text"] = f"{mediaTitle} ({newProgress}/{totalEpisodes})"
+                        kb["text"] = f"[{newProgress}/{totalEpisodes}] {mediaTitle}"
                         break
 
 
