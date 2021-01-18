@@ -163,23 +163,26 @@ def handle_watch_command(query: BotQuery):
         send_security_message(query.chat_id)
         return
 
+    generate_watchlist(query.from_id, query.chat_id, query.user_first_name)
+
+def generate_watchlist(from_id: str, chat_id: str, user_first_name: str, message_id:str=None):
     userInfo = None
     try:
-        userInfo = dynamo.get_item(query.from_id)
+        userInfo = dynamo.get_item(from_id)
     except Exception as err:
         logging.error(f"Failed to fetch user info from dynamodb. Error: {err}")
-        send_message(query.chat_id, get_unavailable_message())
+        send_message(chat_id, get_unavailable_message())
         return
 
     if userInfo is None:
-        send_message(query.chat_id, "Please log in first! (via the /login command or the button below)", {
+        send_message(chat_id, "Please log in first! (via the /login command or the button below)", {
             "reply_markup": { # InlineKeyboardMarkup
                 "inline_keyboard": 
                 [
                     [
                         {
                             "text": "Log in",
-                            "url": get_login_url(query.from_id, query.user_first_name)
+                            "url": get_login_url(from_id, user_first_name)
                         }
                     ]
                 ]
@@ -188,10 +191,10 @@ def handle_watch_command(query: BotQuery):
 
     mediaList = anilist.getAnimeList(userInfo["aniListId"], userInfo["accessToken"])
     if mediaList is None:
-        send_message(query.chat_id, get_unavailable_message())
+        send_message(chat_id, get_unavailable_message())
         return
     if isinstance(mediaList, PermissionError):
-        send_message(query.chat_id, get_unauthorized_message())
+        send_message(chat_id, get_unauthorized_message())
         return
 
     mediaList = sorted(mediaList, key=lambda x: x['media']['title']['userPreferred'])
@@ -214,14 +217,30 @@ def handle_watch_command(query: BotQuery):
             ]
         )
     
-    send_message(query.chat_id, (
-        "Here's your watchlist, use the buttons to increment the episodes watched." if len(buttons) > 0 else
+    buttons.append(
+        [
+            {
+                "text": "Refresh \U0001F504",
+                "callback_data": "/refreshProgress"
+            }
+        ]
+    )
+
+    text = (
+        "Here's your watchlist, use the buttons to increment the episodes watched." if len(mediaList) > 0 else
         "Your watchlist is currently empty, you can add them from AniList."
-        ), {
+    )
+
+    reply_markup = {
         "reply_markup": { # InlineKeyboardMarkup
             "inline_keyboard": buttons
         },
-    })
+    }
+
+    if message_id is None:
+        send_message(chat_id, text, reply_markup)
+    else:
+        edit_message(chat_id, message_id, text, reply_markup)
 
 def handle_login_command(query: BotQuery):
     if query.is_group:
@@ -318,6 +337,22 @@ def send_message(chat_id: str, text: str, other:dict=None, silent=True):
     res = requests.post(url, json=request_body)
     if not res.ok:
         logger.error(f"Telegram failed to send the message: error code {res.status_code}, message: {res.text}")
+
+def edit_message(chat_id: str, message_id: str, text: str, other:dict=None):
+    request_body = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
+    }
+
+    if other:
+        request_body.update(other)
+
+    url = TELEGRAM_BASE_URL + "/editMessageText"
+    res = requests.post(url, json=request_body)
+    if not res.ok:
+        logger.error(f"Telegram failed to edit the message: error code {res.status_code}, message: {res.text}")
+
     
 def handle_callback_query(query: BotQuery):
     cb_query = query.callback_query
@@ -362,29 +397,19 @@ def handle_callback_query(query: BotQuery):
                 new_inline_keyboard = cb_query.reply_markup['inline_keyboard']
                 for keyboard_arr in new_inline_keyboard:
                     kb = keyboard_arr[0]
+                    if kb["callback_data"].startswith("/refreshProgress"):
+                        continue
                     kb_data = json.loads(kb["callback_data"][len("/updateProgress"):])
                     kb_media_id = kb_data['media_id']
                     if kb_media_id == media_id:
                         kb["text"] = f"[{newProgress}/{totalEpisodes}] {mediaTitle}"
                         break
 
-
-                # Edit the message text
-                edit_msg_url = TELEGRAM_BASE_URL + "/editMessageText"
-
-                edit_data = {
-                    "chat_id": cb_query.chat_id,
-                    "message_id": cb_query.message_id,
-                    "text": cb_query.message,
+                edit_message(cb_query.chat_id, cb_query.message_id, cb_query.message, {
                     "reply_markup": {
                         "inline_keyboard": new_inline_keyboard,
                     }
-                }
-
-                res = requests.post(edit_msg_url, json=edit_data)
-
-                if not res.ok:
-                    logger.error(f"Failed to edit watchlist data: {res.text}")
+                })
 
         request_body = {
             "callback_query_id": cb_query.callback_query_id,
@@ -395,7 +420,8 @@ def handle_callback_query(query: BotQuery):
         res = requests.post(url, json=request_body)
         if not res.ok:
             logger.error(f"Telegram failed to send the message: error code {res.status_code}, message: {res.text}")
-
+    elif cb_query.callback_data.startswith("/refreshProgress"):
+        generate_watchlist(cb_query.callback_from_id, cb_query.chat_id, None, cb_query.message_id)
 
 def get_security_message() -> str:
     return "Sorry, you cannot use this feature in group chats for security reasons. Please DM me instead!"
