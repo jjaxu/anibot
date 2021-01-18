@@ -37,7 +37,7 @@ def getAnime(name: str):
 
     # Make the HTTP Api request
     result = send_graphql_request(query, variables)
-    if not result:
+    if result.get("errors"):
         logging.error(f"Failed to search anime {name}")
         return []
 
@@ -56,7 +56,7 @@ def getUserInfo(token: str) -> (int, str):
     '''
 
     result = send_graphql_request(query, token=token)
-    if not result:
+    if result.get("errors"):
         logging.error(f"Failed to get current user info")
         return None
 
@@ -68,7 +68,7 @@ def getUserInfo(token: str) -> (int, str):
     
 
 # Get's the list of status "WATCHING"
-def getAnimeList(user_id: int) -> list:
+def getAnimeList(user_id: int, access_token: str=None) -> list:
     query = '''
     query ($userId: Int) {
         Page {
@@ -90,9 +90,13 @@ def getAnimeList(user_id: int) -> list:
         "userId": int(user_id)
     }
 
-    result = send_graphql_request(query, variables)
-    if not result:
+    result = send_graphql_request(query, variables, access_token)
+    errors = result.get("errors")
+    if errors:
         logging.error(f"Failed to get user's anime list")
+        for err in errors:
+            if err.get("message") == "Invalid token":
+                return PermissionError("Invalid Access Token")
         return None
 
     result = result['Page']['mediaList']
@@ -125,8 +129,13 @@ def getMediaInfo(user_id: int, media_id: int, access_token: str=None):
     }
 
     result = send_graphql_request(query, variables, access_token)
-    if not result:
+    errors = result.get("errors")
+
+    if errors:
         logging.error(f"Failed to get media info of userId: {user_id}, mediaId: {media_id}")
+        for err in errors:
+            if err.get("message") == "Invalid token":
+                return PermissionError("Invalid Access Token")
         return None
 
     return result["MediaList"]
@@ -137,6 +146,9 @@ def increaseProgress(access_token: str, user_id: int, media_id: int) -> dict:
     if not currentInfo:
         return None
 
+    if isinstance(currentInfo, PermissionError):
+        return currentInfo
+
     current_progress = currentInfo['progress']
     total_progress = currentInfo['media']['episodes']
 
@@ -145,14 +157,17 @@ def increaseProgress(access_token: str, user_id: int, media_id: int) -> dict:
             "alreadyCompleted": True
         }
 
-    updateResult = setProgress(access_token, media_id, current_progress + 1)
-    if not updateResult:
+    updateResult = _setProgress(access_token, media_id, current_progress + 1)
+    errors = updateResult.get("errors")
+    if errors is not None:
         logging.error("Failed increment progress")
+        for err in errors:
+            if err.get("message") == "Invalid token":
+                return PermissionError("Invalid Access Token")
         return None
-
     return updateResult
 
-def setProgress(access_token: str, media_id: int, progress: int):
+def _setProgress(access_token: str, media_id: int, progress: int):
     query = '''
     mutation($mediaId: Int, $progress: Int) {
         SaveMediaListEntry(mediaId: $mediaId, progress: $progress) {
@@ -174,9 +189,9 @@ def setProgress(access_token: str, media_id: int, progress: int):
     }
 
     result = send_graphql_request(query, variables, access_token)
-    if not result:
+    if result.get("errors"):
         logging.error(f"Failed to set progress to {progress} for media {media_id}")
-        return None
+        return result
 
     result = result["SaveMediaListEntry"]
     logging.info(f"Set progress for anime: {result}")
@@ -188,6 +203,11 @@ def send_graphql_request(query: dict, variables: dict=dict(), token: str=None) -
 
     if not response.ok:
         logging.error(f"AniList API returned an error: {response.text}")
-        return None
+        try:
+            return response.json()
+        except:
+            return {
+                "errors": [ { "message": "unknown error" } ]
+            }
 
     return response.json()['data']

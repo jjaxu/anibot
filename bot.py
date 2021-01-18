@@ -1,6 +1,6 @@
 import os, json, requests, logging, random, utils, dynamo
 
-from anilist import getAnime, getAnimeList, increaseProgress
+from anilist import getAnime, getAnimeList, increaseProgress, getUserInfo
 from htmlParser import strip_tags
 from botquery import BotQuery
 
@@ -187,11 +187,15 @@ def handle_watch_command(query: BotQuery):
             }})
         return
 
-    mediaList = sorted(getAnimeList(userInfo["aniListId"]), key=lambda x: x['media']['title']['userPreferred'])
+    mediaList = getAnimeList(userInfo["aniListId"], userInfo["accessToken"])
     if mediaList is None:
         send_message(query.chat_id, get_unavailable_message())
         return
+    if isinstance(mediaList, PermissionError):
+        send_message(query.chat_id, get_unauthorized_message())
+        return
 
+    mediaList = sorted(mediaList, key=lambda x: x['media']['title']['userPreferred'])
     buttons = []
     
     for item in mediaList:
@@ -236,7 +240,8 @@ def handle_login_command(query: BotQuery):
         send_message(query.chat_id, get_unavailable_message())
         return
 
-    is_logged_in = userInfo is not None
+    # valid login if user info is found in the DB and the credentials are valid
+    is_logged_in = userInfo is not None and getUserInfo(userInfo["accessToken"]) is not None
 
     if not is_logged_in:
         send_message(query.chat_id, "You're not currently logged in.", {
@@ -332,31 +337,32 @@ def handle_callback_query(query: BotQuery):
             send_message(query.chat_id, get_unavailable_message())
             return
 
-        user_id = userInfo['aniListId']
-        access_token = userInfo['accessToken']
-
-    
-        updateResult = increaseProgress(access_token, user_id, media_id)
-        
         response_text = ""
-        
-        if not updateResult: # Error
-            response_text = get_unavailable_message()
-        elif updateResult.get("alreadyCompleted"): # Already done, no updates done
-            response_text = "You have already completed this series"
+        if not userInfo: # The user logged out, then tried to use an older button
+            response_text = "You must log in before you can do this"
         else:
-            newProgress = updateResult['progress']
-            totalEpisodes = updateResult['media']['episodes']
-            mediaTitle = updateResult['media']['title']['userPreferred']
-            if newProgress == totalEpisodes: # Updated and now complete
-                 response_text = f"Updated! You have completed '{mediaTitle}' with progress {newProgress}/{totalEpisodes}"
-            else: # Updated and still in progress
-                response_text = f"Updated! Your new progress for '{mediaTitle}' is now: {newProgress}/{totalEpisodes}"
+            user_id = userInfo['aniListId']
+            access_token = userInfo['accessToken']
+            updateResult = increaseProgress(access_token, user_id, media_id)
+        
+            if not updateResult: # Error
+                response_text = get_unavailable_message()
+            elif isinstance(updateResult, PermissionError):
+                response_text = get_unauthorized_message()
+            elif updateResult.get("alreadyCompleted"): # Already done, no updates done
+                response_text = "You have already completed this series"
+            else:
+                newProgress = updateResult['progress']
+                totalEpisodes = updateResult['media']['episodes']
+                mediaTitle = updateResult['media']['title']['userPreferred']
+                if newProgress == totalEpisodes: # Updated and now complete
+                    response_text = f"Updated! You have completed '{mediaTitle}' with progress {newProgress}/{totalEpisodes}"
+                else: # Updated and still in progress
+                    response_text = f"Updated! Your new progress for '{mediaTitle}' is now: {newProgress}/{totalEpisodes}"
     
         request_body = {
             "callback_query_id": cb_query.callback_query_id,
             "text": response_text,
-            "show_alert": True
         }
 
         url = TELEGRAM_BASE_URL + "/answerCallbackQuery"
@@ -370,6 +376,9 @@ def get_security_message() -> str:
 
 def get_unavailable_message() -> str:
     return "This feature is currently unavilable, please check back later."
+
+def get_unauthorized_message():
+    return "Not authorized, you need to log in again"
 
 def send_security_message(chat_id: str):
     send_message(chat_id, get_security_message(), {
