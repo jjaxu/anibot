@@ -3,7 +3,7 @@ import requests, json, logging
 ANILIST_URL = 'https://graphql.anilist.co'
 
 def getAnime(name: str):
-    querySearch = '''
+    query = '''
     query ($searchInput: String) {
         Page (page: 1, perPage: 20) {
             media (search: $searchInput, sort: POPULARITY_DESC) {
@@ -36,12 +36,12 @@ def getAnime(name: str):
     }
 
     # Make the HTTP Api request
-    response = requests.post(ANILIST_URL, json={'query': querySearch, 'variables': variables})
-    if not response.ok:
-        logging.error(f"Failed to search anime {name}. Error: {response.text}")
+    result = send_graphql_request(query, variables)
+    if not result:
+        logging.error(f"Failed to search anime {name}")
         return []
 
-    result = json.loads(response.text)["data"]["Page"]["media"]
+    result = result["Page"]["media"]
     logging.info(f'Anime results returned for query "{name}": {len(result)}')
     return result
 
@@ -55,15 +55,12 @@ def getUserInfo(token: str) -> (int, str):
     }
     '''
 
-    variables = dict()
-    headers = {"Authorization": f"Bearer {token}"}
-
-    response = requests.post(ANILIST_URL, headers=headers ,json={'query': query, 'variables': variables})
-    if not response.ok:
-        logging.error(f"Failed to get user info. Error: {response.text}")
+    result = send_graphql_request(query, token=token)
+    if not result:
+        logging.error(f"Failed to get current user info")
         return None
 
-    result = response.json()['data']['Viewer']
+    result = result['Viewer']
     logging.info(f"Got user info from AniList: {result}")
 
     
@@ -81,9 +78,7 @@ def getAnimeList(user_id: int) -> list:
                     id
                     episodes
                     title {
-                        romaji
-                        english
-                        native
+                        userPreferred
                     }
                 }
             }
@@ -95,15 +90,44 @@ def getAnimeList(user_id: int) -> list:
         "userId": int(user_id)
     }
 
-    response = requests.post(ANILIST_URL, json={'query': query, 'variables': variables})
-    if not response.ok:
-        logging.error(f"Failed to get user's anime list. Error: {response.text}")
-        return []
+    result = send_graphql_request(query, variables)
+    if not result:
+        logging.error(f"Failed to get user's anime list")
+        return None
 
-    result = response.json()['data']['Page']['mediaList']
+    result = result['Page']['mediaList']
     logging.info(f"Got user info from AniList: {result}")
 
     return result
 
-def increaseProgress(access_token: str, media_id: int):
-    pass
+def increaseProgress(access_token: str, media_id: int) -> dict:
+    return None
+    
+
+
+def setProgress():
+    query = '''
+    mutation($mediaId: Int, $progress: Int) {
+        SaveMediaListEntry(mediaId: $mediaId, progress: $progress) {
+            status
+            progress
+            media {
+                episodes
+                title {
+                    userPreferred
+                }
+            }
+        }
+    }
+    '''
+
+
+def send_graphql_request(query: dict, variables: dict=dict(), token: str=None) -> dict:
+    headers = {"Authorization": f"Bearer {token}"} if token else None
+    response = requests.post(ANILIST_URL, headers=headers ,json={'query': query, 'variables': variables})
+
+    if not response.ok:
+        logging.error(f"AniList API returned an error: {response.text}")
+        return None
+
+    return response.json()['data']

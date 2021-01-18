@@ -187,14 +187,18 @@ def handle_watch_command(query: BotQuery):
             }})
         return
 
-    mediaList = sorted(getAnimeList(userInfo["aniListId"]), key=lambda x: x['media']['title']['romaji'])
+    mediaList = sorted(getAnimeList(userInfo["aniListId"]), key=lambda x: x['media']['title']['userPreferred'])
+    if mediaList is None:
+        send_message(query.chat_id, f"This feature is currently unavilable, please check back later.")
+        return
+
     buttons = []
     
     for item in mediaList:
         progress = item['progress']
         anime = item['media']
         episodes = anime['episodes']
-        title = anime['title']['romaji'] or anime['title']['english']
+        title = anime['title']['userPreferred']
 
         buttons.append(
             [
@@ -318,8 +322,20 @@ def handle_callback_query(query: BotQuery):
     elif cb_query.callback_data.startswith("/updateProgress"):
         data = json.loads(cb_query.callback_data[len("/updateProgress"):])
         media_id = data['media_id']
-        access_token = "abc123" # TODO: fetch from DB
-        increaseProgress(access_token, media_id)
+        sender_id = cb_query.callback_from_id
+
+        userInfo = None
+        try:
+            userInfo = dynamo.get_item(sender_id)
+        except Exception as err:
+            logging.error(f"Failed to fetch user info from dynamodb. Error: {err}")
+            send_message(query.chat_id, f"This feature is currently unavilable, please check back later.")
+            return
+
+        access_token = userInfo['accessToken']
+
+        # TODO: WIP
+        result = increaseProgress(access_token, media_id)
 
         # Gate finished anime
         request_body = {
