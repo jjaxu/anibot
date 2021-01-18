@@ -43,7 +43,6 @@ def handler(event, context):
             "body": json.dumps({"error": "Failed to identify user, are you using a stale link?"})
         }
 
-    sender_name = sender_data["sender_name"]
     sender_id = sender_data["sender_id"]
 
     logger.info(f"Successfully authorized Anibot for user: {sender_data}")
@@ -67,7 +66,7 @@ def handler(event, context):
         logger.error(f"Failed save data to dynamoDB. Error: {err}")
         return {
             "statusCode": 503,
-            "body": json.dumps({"message": f"Failed to authorize Anibot for '{sender_name}', please try again later."})
+            "body": json.dumps({"message": f"Failed to authorize Anibot for user '{sender_id}', please try again later."})
         }
 
     

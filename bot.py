@@ -163,9 +163,9 @@ def handle_watch_command(query: BotQuery):
         send_security_message(query.chat_id)
         return
 
-    generate_watchlist(query.from_id, query.chat_id, query.user_first_name)
+    generate_watchlist(query.from_id, query.chat_id)
 
-def generate_watchlist(from_id: str, chat_id: str, user_first_name: str, message_id:str=None):
+def generate_watchlist(from_id: str, chat_id: str, message_id:str=None):
     userInfo = None
     try:
         userInfo = dynamo.get_item(from_id)
@@ -182,7 +182,7 @@ def generate_watchlist(from_id: str, chat_id: str, user_first_name: str, message
                     [
                         {
                             "text": "Log in",
-                            "url": get_login_url(from_id, user_first_name)
+                            "url": get_login_url(from_id)
                         }
                     ]
                 ]
@@ -248,7 +248,6 @@ def handle_login_command(query: BotQuery):
         return
     
     sender_id = query.from_id
-    sender_first_name = query.user_first_name
 
     userInfo = None
     try:
@@ -269,7 +268,7 @@ def handle_login_command(query: BotQuery):
                     [
                         {
                             "text": "Log in via Anilist",
-                            "url": get_login_url(sender_id, sender_first_name)
+                            "url": get_login_url(sender_id)
                         }
                     ]
                 ]
@@ -421,7 +420,7 @@ def handle_callback_query(query: BotQuery):
         if not res.ok:
             logger.error(f"Telegram failed to send the message: error code {res.status_code}, message: {res.text}")
     elif cb_query.callback_data.startswith("/refreshProgress"):
-        generate_watchlist(cb_query.callback_from_id, cb_query.chat_id, None, cb_query.message_id)
+        generate_watchlist(cb_query.callback_from_id, cb_query.chat_id, cb_query.message_id)
 
 def get_security_message() -> str:
     return "Sorry, you cannot use this feature in group chats for security reasons. Please DM me instead!"
@@ -447,9 +446,8 @@ def send_security_message(chat_id: str):
         },
     })
 
-def get_login_url(sender_id: str, sender_name: str) -> str:
+def get_login_url(sender_id: str) -> str:
     state_payload = utils.encode_to_base64_string(json.dumps({
-        "sender_id": sender_id,
-        "sender_name": sender_name
+        "sender_id": sender_id
     }))
     return f"https://anilist.co/api/v2/oauth/authorize?client_id={CLIENT_ID}&response_type=code&state={state_payload}"
