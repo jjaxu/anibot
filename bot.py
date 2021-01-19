@@ -1,4 +1,4 @@
-import os, json, requests, logging, random, utils, dynamo, anilist
+import os, json, requests, logging, random, utils, dynamo, anilist, html
 from htmlParser import strip_tags
 from botquery import BotQuery
 
@@ -64,21 +64,24 @@ def handle_inline_query(query: BotQuery):
         title_japanese = title_romaji + (f" ({title_native})" if title_native else "")
 
         if title_english:
-            title_english_formatted = f"&#x1F1FA;&#x1F1F8; <i>{title_english}</i>\n"
+            title_english_formatted = f"&#x1F1FA;&#x1F1F8; <i>{html.escape(title_english)}</i>\n"
 
         description = anime["description"] or "(no description)"
         description_no_markup = strip_tags(description)
-        description_html = description.replace("<br>", "")
+        description_html = html.escape(description.replace("<br>", ""))
 
         siteUrl = anime["siteUrl"]
         episodes_or_volumes_label = "episodes" if anime["type"] == "ANIME" else "volumes"
 
+        score = anime.get('averageScore')
+        score = f"{score}%" if score is not None else '-'
+
         msg_body = (
-            f"&#x1F1EF;&#x1F1F5; <i>{title_japanese}</i>\n"
+            f"&#x1F1EF;&#x1F1F5; <i>{html.escape(title_japanese)}</i>\n"
             f"{title_english_formatted}\n"
             f"<b>Type:</b> {(anime['type'] or '-').title()} ({(anime['format'] or '-').replace('_', ' ')})\n"
             f"<b>Status:</b> {(anime['status'] or '-').title().replace('_', ' ') }\n"
-            f"<b>Average score:</b> {anime['averageScore'] or '-' }%\n"
+            f"<b>Average score:</b> {score}\n"
             f"<b>{episodes_or_volumes_label.title()}:</b> { (anime[episodes_or_volumes_label] or '-') }\n"
             f"<a href=\"{siteUrl}\">&#x200b;</a>" # To show preview, use a zero-width space
         )
@@ -178,36 +181,49 @@ def handle_watch_command(query: BotQuery):
 
     generate_watchlist(query.from_id, query.chat_id)
 
-def generate_watchlist(from_id: str, chat_id: str, message_id:str=None):
+def generate_watchlist(from_id: str, chat_id: str, message_id:str=None, callback_query_id:str=None):
     userInfo = None
     try:
         userInfo = dynamo.get_item(from_id)
     except Exception as err:
         logging.error(f"Failed to fetch user info from dynamodb. Error: {err}")
-        send_message(chat_id, get_unavailable_message())
+        if callback_query_id:
+            answer_callback_query(callback_query_id, get_unavailable_message(), show_alert=True)
+        else:
+            send_message(chat_id, get_unavailable_message())
         return
 
     if userInfo is None:
-        send_message(chat_id, "Please log in first! (via the /login command or the button below)", {
-            "reply_markup": { # InlineKeyboardMarkup
-                "inline_keyboard": 
-                [
+
+        if callback_query_id:
+            answer_callback_query(callback_query_id, get_need_login_message(), show_alert=True)
+        else:
+            send_message(chat_id, f"{get_need_login_message()} (or the button below).", {
+                "reply_markup": { # InlineKeyboardMarkup
+                    "inline_keyboard": 
                     [
-                        {
-                            "text": "Log in",
-                            "url": get_login_url(from_id)
-                        }
+                        [
+                            {
+                                "text": "Log in",
+                                "url": get_login_url(from_id)
+                            }
+                        ]
                     ]
-                ]
-            }})
+                }})
         return
 
     mediaList = anilist.getAnimeList(userInfo["aniListId"], userInfo["accessToken"])
     if mediaList is None:
-        send_message(chat_id, get_unavailable_message())
+        if callback_query_id:
+            answer_callback_query(callback_query_id, get_unavailable_message(), show_alert=True)
+        else:
+            send_message(chat_id, get_unavailable_message())
         return
     if isinstance(mediaList, PermissionError):
-        send_message(chat_id, get_unauthorized_message())
+        if callback_query_id:
+            answer_callback_query(callback_query_id, get_unauthorized_message(), show_alert=True)
+        else:
+            send_message(chat_id, get_unauthorized_message())
         return
 
     mediaList = sorted(mediaList, key=lambda x: x['media']['title']['userPreferred'])
@@ -274,7 +290,8 @@ def handle_login_command(query: BotQuery):
     is_logged_in = userInfo is not None and anilist.getUserInfo(userInfo["accessToken"]) is not None
 
     if not is_logged_in:
-        send_message(query.chat_id, "You're not currently logged in.", {
+        message = "You're not currently logged in." if not userInfo else get_unauthorized_message()
+        send_message(query.chat_id, message, {
             "reply_markup": { # InlineKeyboardMarkup
                 "inline_keyboard": 
                 [
@@ -385,18 +402,19 @@ def handle_callback_query(query: BotQuery):
         data = json.loads(cb_query.callback_data[len("/updateProgress"):])
         media_id = data['media_id']
         sender_id = cb_query.callback_from_id
-
+        show_alert = False
         userInfo = None
         try:
             userInfo = dynamo.get_item(sender_id)
         except Exception as err:
             logging.error(f"Failed to fetch user info from dynamodb. Error: {err}")
-            send_message(query.chat_id, get_unavailable_message())
+            answer_callback_query(cb_query.callback_query_id, get_unavailable_message(), show_alert=True)
             return
 
         response_text = ""
         if not userInfo: # The user logged out, then tried to use an older button
-            response_text = "You must log in before you can do this"
+            response_text = get_need_login_message()
+            show_alert = True
         else:
             user_id = userInfo['aniListId']
             access_token = userInfo['accessToken']
@@ -404,8 +422,10 @@ def handle_callback_query(query: BotQuery):
         
             if not updateResult: # Error
                 response_text = get_unavailable_message()
+                show_alert = True
             elif isinstance(updateResult, PermissionError):
                 response_text = get_unauthorized_message()
+                show_alert = True
             elif updateResult.get("alreadyCompleted"): # Already done, no updates done
                 response_text = "You have already completed this series"
             else:
@@ -434,10 +454,10 @@ def handle_callback_query(query: BotQuery):
                     }
                 })
 
-        answer_callback_query(cb_query.callback_query_id, response_text)
+        answer_callback_query(cb_query.callback_query_id, response_text, show_alert=show_alert)
 
     elif cb_query.callback_data.startswith("/refreshProgress"):
-        generate_watchlist(cb_query.callback_from_id, cb_query.chat_id, cb_query.message_id)
+        generate_watchlist(cb_query.callback_from_id, cb_query.chat_id, cb_query.message_id, cb_query.callback_query_id)
     elif cb_query.callback_data.startswith("/addToWatching"):
         data = json.loads(cb_query.callback_data[len("/addToWatching"):])
         media_id = data['media_id']
@@ -458,7 +478,7 @@ def handle_media_status_change(sender_id: str, chat_id: str, callback_query_id: 
         return
 
     if not userInfo: # The user logged out, then tried to use an older button
-        answer_callback_query(callback_query_id, "You must log in first! DM me to log in!", show_alert=True)
+        answer_callback_query(callback_query_id, get_need_login_message(), show_alert=True)
         return
 
     result = (
@@ -469,7 +489,7 @@ def handle_media_status_change(sender_id: str, chat_id: str, callback_query_id: 
         answer_callback_query(callback_query_id, get_unavailable_message(), show_alert=True)
         return
     if isinstance(result, PermissionError):
-        answer_callback_query(callback_query_id, "Not authorized! DM me to log in again!", show_alert=True)
+        answer_callback_query(callback_query_id, get_unauthorized_message(), show_alert=True)
         return
     
     display_status = "Watching" if status == "CURRENT" else "Planning"
@@ -487,7 +507,10 @@ def get_unavailable_message() -> str:
     return "This feature is currently unavilable, please check back later."
 
 def get_unauthorized_message():
-    return "Not authorized, you need to log in again"
+    return "Failed to authorize, you will need to log in again."
+
+def get_need_login_message():
+    return "Please log in first! Log in using the /login command"
 
 def send_security_message(chat_id: str):
     send_message(chat_id, get_security_message(), {
