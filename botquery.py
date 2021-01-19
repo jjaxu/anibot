@@ -70,6 +70,7 @@ class BotQuery:
 
         if not (
             result.message or
+            result.callback_data or
             result.is_inline_query or 
             result.has_callback_query
         ): raise ValueError("Invalid or unsupported query event while parsing")

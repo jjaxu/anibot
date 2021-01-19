@@ -1,5 +1,4 @@
 import os, json, requests, logging, random, utils, dynamo, anilist
-
 from htmlParser import strip_tags
 from botquery import BotQuery
 
@@ -19,7 +18,6 @@ def handler(event, context):
     logger.info(f"Received event with content: {data}; context: {context}")
 
     body = {
-        "message": "Hello Anibot 3!",
         "request": data
     }
 
@@ -96,6 +94,29 @@ def handle_inline_query(query: BotQuery):
             )
         )
 
+        buttons = [
+            [
+                { # InlineKeyboardButton
+                    "text": "View on Anilist",
+                    "url": siteUrl
+                }
+            ],
+            [
+                { # InlineKeyboardButton
+                    "text": "Add to Planning",
+                    "callback_data": "/addToPlanning" + json.dumps({
+                        "media_id": anime['id']
+                    })
+                },
+                { # InlineKeyboardButton
+                    "text": "Add to Watching",
+                    "callback_data": "/addToWatching" + json.dumps({
+                        "media_id": anime['id']
+                    })
+                }
+            ]
+        ]
+
         # Add data to result
         results.append({ # InlineQueryResultArticle
             "type": "article",
@@ -106,15 +127,7 @@ def handle_inline_query(query: BotQuery):
                 "parse_mode": "html",
             },
             "reply_markup": { # InlineKeyboardMarkup
-                "inline_keyboard": 
-                [
-                    [
-                        { # InlineKeyboardButton
-                            "text": "View on Anilist",
-                            "url": siteUrl
-                        }
-                    ]
-                ]
+                "inline_keyboard": buttons
             },
             "url": siteUrl,
             "description": inline_description,
@@ -123,7 +136,7 @@ def handle_inline_query(query: BotQuery):
 
     data = {
         'inline_query_id': query_id,
-        'results': results
+        'results': results,
     }
     url = TELEGRAM_BASE_URL + "/answerInlineQuery"
     res = requests.post(url, json=data)
@@ -352,7 +365,18 @@ def edit_message(chat_id: str, message_id: str, text: str, other:dict=None):
     if not res.ok:
         logger.error(f"Telegram failed to edit the message: error code {res.status_code}, message: {res.text}")
 
-    
+def answer_callback_query(callback_query_id: str, text: str, show_alert: bool=False):
+    request_body = {
+        "callback_query_id": callback_query_id,
+        "text": text,
+        "show_alert": show_alert
+    }
+
+    url = TELEGRAM_BASE_URL + "/answerCallbackQuery"
+    res = requests.post(url, json=request_body)
+    if not res.ok:
+        logger.error(f"Telegram failed to answer callback query: error code {res.status_code}, message: {res.text}")
+
 def handle_callback_query(query: BotQuery):
     cb_query = query.callback_query
     if cb_query.callback_data == "/logout":
@@ -410,17 +434,51 @@ def handle_callback_query(query: BotQuery):
                     }
                 })
 
-        request_body = {
-            "callback_query_id": cb_query.callback_query_id,
-            "text": response_text,
-        }
+        answer_callback_query(cb_query.callback_query_id, response_text)
 
-        url = TELEGRAM_BASE_URL + "/answerCallbackQuery"
-        res = requests.post(url, json=request_body)
-        if not res.ok:
-            logger.error(f"Telegram failed to send the message: error code {res.status_code}, message: {res.text}")
     elif cb_query.callback_data.startswith("/refreshProgress"):
         generate_watchlist(cb_query.callback_from_id, cb_query.chat_id, cb_query.message_id)
+    elif cb_query.callback_data.startswith("/addToWatching"):
+        data = json.loads(cb_query.callback_data[len("/addToWatching"):])
+        media_id = data['media_id']
+        handle_media_status_change(cb_query.callback_from_id, query.chat_id, cb_query.callback_query_id, media_id, "CURRENT")
+    elif cb_query.callback_data.startswith("/addToPlanning"):
+        data = json.loads(cb_query.callback_data[len("/addToPlanning"):])
+        media_id = data['media_id']
+        handle_media_status_change(cb_query.callback_from_id, query.chat_id, cb_query.callback_query_id, media_id, "PLANNING")
+
+
+def handle_media_status_change(sender_id: str, chat_id: str, callback_query_id: str, media_id: str, status: str):
+    userInfo = None
+    try:
+        userInfo = dynamo.get_item(sender_id)
+    except Exception as err:
+        logging.error(f"Failed to fetch user info from dynamodb. Error: {err}")
+        answer_callback_query(callback_query_id, get_unavailable_message(), show_alert=True)
+        return
+
+    if not userInfo: # The user logged out, then tried to use an older button
+        answer_callback_query(callback_query_id, "You must log in first! DM me to log in!", show_alert=True)
+        return
+
+    result = (
+        anilist.addToWatching(userInfo["accessToken"], media_id) if status == "CURRENT" else 
+        anilist.addToPlanning(userInfo["accessToken"], media_id)
+    )
+    if result is None:
+        answer_callback_query(callback_query_id, get_unavailable_message(), show_alert=True)
+        return
+    if isinstance(result, PermissionError):
+        answer_callback_query(callback_query_id, "Not authorized! DM me to log in again!", show_alert=True)
+        return
+    
+    display_status = "Watching" if status == "CURRENT" else "Planning"
+
+    progress = result['progress']
+    episodes = result['media']['episodes']
+    mediaTitle = result['media']['title']['userPreferred']
+    answer_callback_query(callback_query_id, f"Added '{mediaTitle}' to '{display_status}'! [{progress}/{episodes}]")
+
 
 def get_security_message() -> str:
     return "Sorry, you cannot use this feature in group chats for security reasons. Please DM me instead!"

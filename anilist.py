@@ -197,6 +197,51 @@ def _setProgress(access_token: str, media_id: int, progress: int):
     logging.info(f"Set progress for anime: {result}")
     return result
 
+
+def _setMediaStatus(access_token: str, media_id: int, status: str):
+    query = '''
+    mutation($mediaId: Int, $status: MediaListStatus) {
+        SaveMediaListEntry(mediaId: $mediaId, status: $status) {
+            mediaId
+            status
+            progress
+            media {
+                id
+                title {
+                    userPreferred
+                }
+                episodes
+            }
+        }
+    }
+    '''
+    variables = {
+        "mediaId": int(media_id),
+        "status": str(status)
+    }
+
+    result = send_graphql_request(query, variables, access_token)
+
+    errors = result.get("errors")
+    if errors is not None:
+        logging.error(f"Failed to set media status for media {media_id}")
+        for err in errors:
+            if err.get("message") == "Invalid token":
+                return PermissionError("Invalid Access Token")
+        return None
+
+    result = result["SaveMediaListEntry"]
+    logging.info(f"Set media status for anime: {result}")
+    return result
+
+
+def addToWatching(access_token: str, media_id: int):
+    return _setMediaStatus(access_token, media_id, "CURRENT")
+
+
+def addToPlanning(access_token: str, media_id: int):
+    return _setMediaStatus(access_token, media_id, "PLANNING")
+
 def send_graphql_request(query: dict, variables: dict=dict(), token: str=None) -> dict:
     headers = {"Authorization": f"Bearer {token}"} if token else None
     response = requests.post(ANILIST_URL, headers=headers ,json={'query': query, 'variables': variables})
