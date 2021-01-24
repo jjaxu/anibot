@@ -9,6 +9,7 @@ provider: # Required to tell serverless this is an aws project, modify as needed
   profile: botprofile
   logRetentionInDays: 14
   environment:
+    ANIBOT_USERNAME: theanibot
     ANIBOT_TOKEN: ${env:ANIBOT_TOKEN}
     ANIBOT_CLIENT_ID: ${env:ANIBOT_CLIENT_ID}
     ANIBOT_CLIENT_SECRET: ${env:ANIBOT_CLIENT_SECRET}

@@ -4,6 +4,7 @@ from botquery import BotQuery
 
 TOKEN = os.environ['ANIBOT_TOKEN']
 CLIENT_ID = os.environ['ANIBOT_CLIENT_ID']
+BOT_USERNAME = os.environ.get('ANIBOT_USERNAME', '')
 TELEGRAM_BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 MAX_ITEMS = 20
 
@@ -151,7 +152,7 @@ def handle_inline_query(query: BotQuery):
 def handle_normal_query(data):
     msg = data["message"]
 
-    if msg.get("via_bot") and msg["via_bot"]["username"] == "theanibot":
+    if msg.get("via_bot") and msg["via_bot"]["username"] == BOT_USERNAME:
         handle_bot_response(msg)
         return
     
@@ -160,10 +161,10 @@ def handle_normal_query(data):
     except Exception as err:
         logger.error(f"Unsupported query: {err}")
         return
-    
-    msg = query.message.replace("@theanibot", "")
+        
+    msg = query.message
     if msg.startswith("/start"):
-        send_message(query.chat_id, "Hello! Anibot at your service! You can search by typing @theanibot... or type '/' to see all the available commands.")
+        send_message(query.chat_id, f"Hello! Anibot at your service! You can search by typing @{BOT_USERNAME}... or type '/' to see all the available commands.")
     elif msg.startswith("/debug"):
         return
         # send_message(query.chat_id, vars(query))
@@ -520,7 +521,7 @@ def send_security_message(chat_id: str):
                 [
                     {
                         "text": "Go to bot's DM",
-                        "url": "https://t.me/theanibot"
+                        "url": f"https://t.me/{BOT_USERNAME}"
                     }
                 ]
             ]
