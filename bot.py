@@ -232,7 +232,7 @@ def generate_watchlist(from_id: str, chat_id: str, message_id:str=None, callback
     for item in mediaList:
         progress = item['progress']
         anime = item['media']
-        episodes = anime['episodes']
+        episodes = anime['episodes'] or '-'
         title = anime['title']['userPreferred']
 
         buttons.append(
@@ -430,7 +430,7 @@ def handle_callback_query(query: BotQuery):
                 response_text = "You have already completed this series"
             else:
                 newProgress = updateResult['progress']
-                totalEpisodes = updateResult['media']['episodes']
+                totalEpisodes = updateResult['media']['episodes'] or '-'
                 mediaTitle = updateResult['media']['title']['userPreferred']
                 if newProgress == totalEpisodes: # Updated and now complete
                     response_text = f"Updated! You have completed '{mediaTitle}' with progress {newProgress}/{totalEpisodes}"
@@ -495,7 +495,7 @@ def handle_media_status_change(sender_id: str, chat_id: str, callback_query_id: 
     display_status = "Watching" if status == "CURRENT" else "Planning"
 
     progress = result['progress']
-    episodes = result['media']['episodes']
+    episodes = result['media']['episodes'] or '-'
     mediaTitle = result['media']['title']['userPreferred']
     answer_callback_query(callback_query_id, f"Added '{mediaTitle}' to '{display_status}'! [{progress}/{episodes}]")
 
