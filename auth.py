@@ -15,7 +15,7 @@ def handler(event, context):
         "client_id": CLIENT_ID,
         "client_secret": CLIENT_SECRET,
         "grant_type": "authorization_code",
-        "code": event["queryStringParameters"]["code"],
+        "code": event["queryStringParameters"].get("code", ""),
         "redirect_uri": f"https://{event['headers']['Host']}{event['requestContext']['path']}"
     }
     
@@ -25,12 +25,18 @@ def handler(event, context):
         logger.error(f"Failed to get auth token: {res.text}")
         return {
             "statusCode": res.status_code,
-            "body": json.dumps({"error": "Failed authorize user via AniList, please try again later."})
+            "body": json.dumps({"error": "Failed authorize via AniList, please try again later."})
         }
 
     res_json = res.json()
 
-    access_token = res_json["access_token"]
+    access_token = res_json.get("access_token")
+    if not access_token:
+        logger.warning(f"User denied Anilist access: {res_json.get('error', '')}")
+        return {
+            "statusCode": 401,
+            "body": json.dumps({"error": "Authorization failed, you can always try again."})
+        }
     
     # Parse state to identify user
     sender_data = None
