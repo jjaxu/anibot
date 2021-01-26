@@ -22,22 +22,24 @@ provider: # Required to tell serverless this is an aws project, modify as needed
         - dynamodb:PutItem
         - dynamodb:DeleteItem
       Resource: !GetAtt usersTable.Arn
-  resourcePolicy:
-    - Effect: Allow
-      Principal: '*'
-      Action: execute-api:Invoke
-      Resource:
-        - execute-api:/*/POST/bot
-      Condition:
-        IpAddress:
-          aws:SourceIp:
-            - '149.154.160.0/20'
-            - '91.108.4.0/22'
-    - Effect: Allow
-      Principal: '*'
-      Action: execute-api:Invoke
-      Resource:
-        - execute-api:/*/GET/auth
+
+  apiGateway:
+    resourcePolicy:
+      - Effect: Allow
+        Principal: '*'
+        Action: execute-api:Invoke
+        Resource:
+          - execute-api:/*/POST/bot
+        Condition:
+          IpAddress:
+            aws:SourceIp:
+              - '149.154.160.0/20'
+              - '91.108.4.0/22'
+      - Effect: Allow
+        Principal: '*'
+        Action: execute-api:Invoke
+        Resource:
+          - execute-api:/*/GET/auth
 
 # Configure your lambda function(s) here
 functions:
