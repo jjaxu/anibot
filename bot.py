@@ -8,6 +8,9 @@ BOT_USERNAME = os.environ.get('ANIBOT_USERNAME', '')
 TELEGRAM_BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 MAX_ITEMS = 20
 
+ANIME = "ANIME"
+MANGA = "MANGA"
+
 logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(filename)s:%(funcName)s:%(asctime)s:%(message)s')
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -72,8 +75,14 @@ def handle_inline_query(query: BotQuery):
         description_html = html.escape(description.replace("<br>", ""))
 
         siteUrl = anime["siteUrl"]
-        episodes_or_volumes_label = "episodes" if anime["type"] == "ANIME" else "volumes"
 
+        volumes_formatted = ""
+        if anime["type"] == ANIME:
+            episodes_or_chapters_label = "episodes"
+        else:
+            volumes_formatted = f"<b>Volumes:</b> { anime['volumes'] or '-' }\n"
+            episodes_or_chapters_label = "chapters"
+        
         score = anime.get('averageScore')
         score = f"{score}%" if score is not None else '-'
 
@@ -83,7 +92,8 @@ def handle_inline_query(query: BotQuery):
             f"<b>Type:</b> {(anime['type'] or '-').title()} ({(anime['format'] or '-').replace('_', ' ')})\n"
             f"<b>Status:</b> {(anime['status'] or '-').title().replace('_', ' ') }\n"
             f"<b>Average score:</b> {score}\n"
-            f"<b>{episodes_or_volumes_label.title()}:</b> { (anime[episodes_or_volumes_label] or '-') }\n"
+            f"<b>{episodes_or_chapters_label.title()}:</b> { (anime[episodes_or_chapters_label] or '-') }\n"
+            f"{volumes_formatted}"
             f"<a href=\"{siteUrl}\">&#x200b;</a>" # To show preview, use a zero-width space
         )
 
@@ -113,7 +123,7 @@ def handle_inline_query(query: BotQuery):
                     })
                 },
                 { # InlineKeyboardButton
-                    "text": "Add to Watching",
+                    "text": "Add to Current",
                     "callback_data": "/addToWatching" + json.dumps({
                         "media_id": anime['id']
                     })
@@ -174,15 +184,24 @@ def handle_normal_query(data):
         handle_logout_command(query)
     elif msg.startswith("/watch"):
         handle_watch_command(query)
+    elif msg.startswith("/read"):
+        handle_read_command(query)
 
 def handle_watch_command(query: BotQuery):
     if query.is_group:
         send_security_message(query.chat_id)
         return
 
-    generate_watchlist(query.from_id, query.chat_id)
+    generate_list(query.from_id, query.chat_id, mediaType=ANIME)
 
-def generate_watchlist(from_id: str, chat_id: str, message_id:str=None, callback_query_id:str=None):
+def handle_read_command(query: BotQuery):
+    if query.is_group:
+        send_security_message(query.chat_id)
+        return
+
+    generate_list(query.from_id, query.chat_id, mediaType=MANGA)
+
+def generate_list(from_id: str, chat_id: str, message_id:str=None, callback_query_id:str=None, mediaType:str=None):
     userInfo = None
     try:
         userInfo = dynamo.get_item(from_id)
@@ -195,7 +214,6 @@ def generate_watchlist(from_id: str, chat_id: str, message_id:str=None, callback
         return
 
     if userInfo is None:
-
         if callback_query_id:
             answer_callback_query(callback_query_id, get_need_login_message(), show_alert=True)
         else:
@@ -212,8 +230,10 @@ def generate_watchlist(from_id: str, chat_id: str, message_id:str=None, callback
                     ]
                 }})
         return
+    
+    anilistId, accessToken = userInfo["aniListId"], userInfo["accessToken"]
 
-    mediaList = anilist.getAnimeList(userInfo["aniListId"], userInfo["accessToken"])
+    mediaList = anilist.getAnimeList(anilistId, accessToken) if mediaType == ANIME else anilist.getMangaList(anilistId, accessToken)
     if mediaList is None:
         if callback_query_id:
             answer_callback_query(callback_query_id, get_unavailable_message(), show_alert=True)
@@ -233,13 +253,13 @@ def generate_watchlist(from_id: str, chat_id: str, message_id:str=None, callback
     for item in mediaList:
         progress = item['progress']
         anime = item['media']
-        episodes = anime['episodes'] or '-'
+        episodesOrChapters = anime['episodes'] or anime['chapters'] or '-'
         title = anime['title']['userPreferred']
 
         buttons.append(
             [
                 {
-                    "text": f"[{progress}/{episodes}] {title}",
+                    "text": f"[{progress}/{episodesOrChapters}] {title}",
                     "callback_data": "/updateProgress" + json.dumps({
                         "media_id": anime['id']
                     })
@@ -251,14 +271,14 @@ def generate_watchlist(from_id: str, chat_id: str, message_id:str=None, callback
         [
             {
                 "text": "Refresh \U0001F504",
-                "callback_data": "/refreshProgress"
+                "callback_data": f"/refreshProgress{mediaType}"
             }
         ]
     )
 
     text = (
-        "Here's your watchlist, use the buttons to increment the episodes watched." if len(mediaList) > 0 else
-        "Your watchlist is currently empty, you can add them from AniList."
+        f"Here's your current {mediaType.lower()} list, use the buttons to increment your progress." if len(mediaList) > 0 else
+        f"Your current {mediaType.lower()} list is empty, you can add them from AniList or via @{BOT_USERNAME} query."
     )
 
     reply_markup = {
@@ -431,12 +451,12 @@ def handle_callback_query(query: BotQuery):
                 response_text = "You have already completed this series"
             else:
                 newProgress = updateResult['progress']
-                totalEpisodes = updateResult['media']['episodes'] or '-'
+                totalEpisodesOrChapters = updateResult['media']['episodes'] or updateResult['media']['chapters'] or '-'
                 mediaTitle = updateResult['media']['title']['userPreferred']
-                if newProgress == totalEpisodes: # Updated and now complete
-                    response_text = f"Updated! You have completed '{mediaTitle}' with progress {newProgress}/{totalEpisodes}"
+                if newProgress == totalEpisodesOrChapters: # Updated and now complete
+                    response_text = f"Updated! You have completed '{mediaTitle}' with progress {newProgress}/{totalEpisodesOrChapters}"
                 else: # Updated and still in progress
-                    response_text = f"Updated! Your new progress for '{mediaTitle}' is now: {newProgress}/{totalEpisodes}"
+                    response_text = f"Updated! Your new progress for '{mediaTitle}' is now: {newProgress}/{totalEpisodesOrChapters}"
 
                 new_inline_keyboard = cb_query.reply_markup['inline_keyboard']
                 for keyboard_arr in new_inline_keyboard:
@@ -446,7 +466,7 @@ def handle_callback_query(query: BotQuery):
                     kb_data = json.loads(kb["callback_data"][len("/updateProgress"):])
                     kb_media_id = kb_data['media_id']
                     if kb_media_id == media_id:
-                        kb["text"] = f"[{newProgress}/{totalEpisodes}] {mediaTitle}"
+                        kb["text"] = f"[{newProgress}/{totalEpisodesOrChapters}] {mediaTitle}"
                         break
 
                 edit_message(cb_query.chat_id, cb_query.message_id, cb_query.message, {
@@ -458,7 +478,8 @@ def handle_callback_query(query: BotQuery):
         answer_callback_query(cb_query.callback_query_id, response_text, show_alert=show_alert)
 
     elif cb_query.callback_data.startswith("/refreshProgress"):
-        generate_watchlist(cb_query.callback_from_id, cb_query.chat_id, cb_query.message_id, cb_query.callback_query_id)
+        mediaType = cb_query.callback_data[len("/refreshProgress"):]
+        generate_list(cb_query.callback_from_id, cb_query.chat_id, cb_query.message_id, cb_query.callback_query_id, mediaType=mediaType)
     elif cb_query.callback_data.startswith("/addToWatching"):
         data = json.loads(cb_query.callback_data[len("/addToWatching"):])
         media_id = data['media_id']
@@ -493,12 +514,10 @@ def handle_media_status_change(sender_id: str, chat_id: str, callback_query_id: 
         answer_callback_query(callback_query_id, get_unauthorized_message(), show_alert=True)
         return
     
-    display_status = "Watching" if status == "CURRENT" else "Planning"
-
     progress = result['progress']
-    episodes = result['media']['episodes'] or '-'
+    episodesOrChapters = result['media']['episodes'] or result['media']['chapters'] or '-'
     mediaTitle = result['media']['title']['userPreferred']
-    answer_callback_query(callback_query_id, f"Added '{mediaTitle}' to '{display_status}'! [{progress}/{episodes}]")
+    answer_callback_query(callback_query_id, f"Added '{mediaTitle}' to '{status.title()}'! [{progress}/{episodesOrChapters}]")
 
 
 def get_security_message() -> str:

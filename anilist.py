@@ -13,6 +13,7 @@ def getAnime(name: str):
                 type
                 averageScore
                 episodes
+                chapters
                 volumes
                 format
                 siteUrl
@@ -66,25 +67,31 @@ def getUserInfo(token: str) -> (int, str):
     
     return (result['id'], result['name'])
     
+def getAnimeList(user_id: int, access_token: str=None) -> list:
+    return getMediaList(user_id, access_token, "ANIME")
+
+def getMangaList(user_id: int, access_token: str=None) -> list:
+    return getMediaList(user_id, access_token, "MANGA")
 
 # Get's the list of status "WATCHING"
-def getAnimeList(user_id: int, access_token: str=None) -> list:
-    query = '''
-    query ($userId: Int) {
-        Page {
-            mediaList (userId: $userId, status: CURRENT, type: ANIME){
+def getMediaList(user_id: int, access_token: str=None, mediaType: str=None) -> list:
+    query = f"""
+    query ($userId: Int) {{
+        Page {{
+            mediaList (userId: $userId, status: CURRENT, type: {mediaType}){{
                 progress
-                media {
+                media {{
                     id
                     episodes
-                    title {
+                    chapters
+                    title {{
                         userPreferred
-                    }
-                }
-            }
-        }
-    }
-    '''
+                    }}
+                }}
+            }}
+        }}
+    }}
+    """
 
     variables = {
         "userId": int(user_id)
@@ -115,6 +122,7 @@ def getMediaInfo(user_id: int, media_id: int, access_token: str=None):
             media {
                 id
                 episodes
+                chapters
                 title {
                     userPreferred
                 }
@@ -150,7 +158,7 @@ def increaseProgress(access_token: str, user_id: int, media_id: int) -> dict:
         return currentInfo
 
     current_progress = currentInfo['progress']
-    total_progress = currentInfo['media']['episodes']
+    total_progress = currentInfo['media']['episodes'] or currentInfo['media']['chapters']
 
     if current_progress == total_progress:
         return {
@@ -175,6 +183,7 @@ def _setProgress(access_token: str, media_id: int, progress: int):
             progress
             media {
                 episodes
+                chapters
                 title {
                     userPreferred
                 }
@@ -211,6 +220,7 @@ def _setMediaStatus(access_token: str, media_id: int, status: str):
                     userPreferred
                 }
                 episodes
+                chapters
             }
         }
     }
