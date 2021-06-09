@@ -261,7 +261,8 @@ def generate_list(from_id: str, chat_id: str, message_id:str=None, callback_quer
                 {
                     "text": f"[{progress}/{episodesOrChapters}] {title}",
                     "callback_data": "/updateProgress" + json.dumps({
-                        "media_id": anime['id']
+                        "media_id": anime['id'],
+                        'media_type': mediaType
                     })
                 }
             ]
@@ -278,7 +279,7 @@ def generate_list(from_id: str, chat_id: str, message_id:str=None, callback_quer
 
     text = (
         f"Here's your current {mediaType.lower()} list, use the buttons to increment your progress." if len(mediaList) > 0 else
-        f"Your current {mediaType.lower()} list is empty, you can add them from AniList or via @{BOT_USERNAME} query."
+        get_empty_message(mediaType)
     )
 
     reply_markup = {
@@ -422,6 +423,7 @@ def handle_callback_query(query: BotQuery):
     elif cb_query.callback_data.startswith("/updateProgress"):
         data = json.loads(cb_query.callback_data[len("/updateProgress"):])
         media_id = data['media_id']
+        mediaType = data.get('media_type', "")
         sender_id = cb_query.callback_from_id
         show_alert = False
         userInfo = None
@@ -459,7 +461,8 @@ def handle_callback_query(query: BotQuery):
                     response_text = f"Updated! Your new progress for '{mediaTitle}' is now: {newProgress}/{totalEpisodesOrChapters}"
 
                 new_inline_keyboard = cb_query.reply_markup['inline_keyboard']
-                for keyboard_arr in new_inline_keyboard:
+                remove_index = -1
+                for idx, keyboard_arr in enumerate(new_inline_keyboard):
                     kb = keyboard_arr[0]
                     if kb["callback_data"].startswith("/refreshProgress"):
                         continue
@@ -467,7 +470,18 @@ def handle_callback_query(query: BotQuery):
                     kb_media_id = kb_data['media_id']
                     if kb_media_id == media_id:
                         kb["text"] = f"[{newProgress}/{totalEpisodesOrChapters}] {mediaTitle}"
+
+                        # If series is completed, remove from list
+                        if newProgress == totalEpisodesOrChapters:
+                            remove_index = idx
                         break
+                
+                if remove_index != -1:
+                    del new_inline_keyboard[remove_index]
+
+                    # Edge case when the last entry becomes completed -> show empty message
+                    if len(new_inline_keyboard) <= 1:
+                        cb_query.message = get_empty_message(mediaType)
 
                 edit_message(cb_query.chat_id, cb_query.message_id, cb_query.message, {
                     "reply_markup": {
@@ -531,6 +545,9 @@ def get_unauthorized_message():
 
 def get_need_login_message():
     return "Please log in first! Log in using the /login command"
+
+def get_empty_message(mediaType: str) -> str:
+    return f"Your current {mediaType.lower()} list is empty, you can add them from AniList or via @{BOT_USERNAME} query."
 
 def send_security_message(chat_id: str):
     send_message(chat_id, get_security_message(), {
